@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model tblPlanningCargas {
+  id                         Int       @id(map: "PK_tblPlanningCargas") @default(autoincrement())
+  cliente                    String?   @db.NVarChar(255)
+  countryId                  Int?
+  encomendaDoCliente         String?   @db.NVarChar(255)
+  encomendaPrimavera         String?   @db.NVarChar(255)
+  projecto                   String?   @db.NVarChar(255)
+  estadoId                   Int?
+  dataPrevistaDeCarga        DateTime? @db.DateTime
+  contactosParaEntrega       String?   @db.NVarChar(Max)
+  mercadoria                 String?   @db.NVarChar(Max)
+  condicoesDePagamento       String?   @db.NVarChar(255)
+  mercadoriaQueFaltaEntregar String?   @db.NVarChar(Max)
+  dateCreated                DateTime? @db.DateTime
+  localizacao                String?   @db.NVarChar(Max)
+  id_primavera               String?   @db.NVarChar(255)
+  transportador              String?   @db.NVarChar(255)
+  custos_de_transporte       Decimal?  @db.Decimal(18, 2)
+  prazoDeEntregaPrevisto     String?   @db.NVarChar(50)
+}
+
+model tblPlanningCargaServicos {
+  id              Int  @id(map: "PK__tblPlann__3213E83FD03DC87E") @default(autoincrement())
+  planningCargaId Int?
+  servicoId       Int?
+}
+
+model tblPlanningCountry {
+  id      Int     @id(map: "PK_tblPlanningCountry") @default(autoincrement())
+  country String? @db.NVarChar(50)
+}
+
+model tblPlanningEstado {
+  id     Int     @id(map: "PK_tblPlanningEstado") @default(autoincrement())
+  descPT String? @db.NVarChar(50)
+  descEN String? @db.NVarChar(50)
+  descFR String? @db.NVarChar(50)
+  descES String? @db.NVarChar(50)
+}
+
+model tblPlanningServicosTipos {
+  id     Int     @id(map: "PK_tblPlanningServicosTipos") @default(autoincrement())
+  descPT String? @db.NVarChar(50)
+  descEN String? @db.NVarChar(50)
+  descFR String? @db.NVarChar(50)
+  descES String? @db.NVarChar(50)
+}
+
+model users {
+  id           Int       @id(map: "PK__users__3213E83FC0E99C11") @default(autoincrement())
+  username     String    @unique(map: "UQ__users__F3DBC57239B19AEF") @db.NVarChar(50)
+  passwordHash String    @db.NVarChar(255)
+  name         String    @db.NVarChar(100)
+  email        String?   @db.NVarChar(100)
+  role         String?   @default("user", map: "DF__users__role__37A5467C") @db.NVarChar(20)
+  active       Boolean?  @default(true, map: "DF__users__active__38996AB5")
+  createdAt    DateTime? @default(now(), map: "DF__users__createdAt__398D8EEE") @db.DateTime
+  lastLogin    DateTime? @db.DateTime
+
+  @@index([active], map: "IX_users_active")
+  @@index([username], map: "IX_users_username")
+}
