@@ -52,7 +52,7 @@ export async function GET(
       localizacao: carga.localizacao || '',
       transportador: carga.transportador || '',
       custos_de_transporte: carga.custos_de_transporte?.toString() || '',
-      servicosARealizar: servicos.map(s => s.servicoId).filter((id): id is number => id !== null)
+      servicosARealizar: servicos.map((s: any) => s.servicoId).filter((id): id is number => id !== null)
     });
 
   } catch (error) {
