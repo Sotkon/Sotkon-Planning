@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import ExcelJS from 'exceljs';
+import { tblPlanningCargaServicos } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -112,7 +113,7 @@ export async function GET(request: NextRequest) {
   if (servicosDaCarga.length > 0) {
     // ✅ CORRIGIDO - Filtrar nulls
     const servicosIds = servicosDaCarga
-      .map(s => s.servicoId)
+      .map((s: tblPlanningCargaServicos) => s.servicoId)
       .filter((id): id is number => id !== null);
     
     if (servicosIds.length > 0) {
