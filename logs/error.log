@@ -1,0 +1,22 @@
+[next-auth][error][JWT_SESSION_ERROR] 
+https://next-auth.js.org/errors#jwt_session_error decryption operation failed {
+  message: 'decryption operation failed',
+  stack: 'h: decryption operation failed\n' +
+    '    at C:\\Apps\\Sotkon-Planning\\.next\\standalone\\.next\\server\\chunks\\577.js:1:121971\n' +
+    '    at b.default (C:\\Apps\\Sotkon-Planning\\.next\\standalone\\.next\\server\\chunks\\577.js:1:121998)\n' +
+    '    at b.flattenedDecrypt (C:\\Apps\\Sotkon-Planning\\.next\\standalone\\.next\\server\\chunks\\577.js:10:63949)\n' +
+    '    at async b.compactDecrypt (C:\\Apps\\Sotkon-Planning\\.next\\standalone\\.next\\server\\chunks\\577.js:1:32000)\n' +
+    '    at async b.jwtDecrypt (C:\\Apps\\Sotkon-Planning\\.next\\standalone\\.next\\server\\chunks\\577.js:18:6206)\n' +
+    '    at async Object.l [as decode] (C:\\Apps\\Sotkon-Planning\\.next\\standalone\\.next\\server\\chunks\\577.js:10:26989)\n' +
+    '    at async Object.e (C:\\Apps\\Sotkon-Planning\\.next\\standalone\\.next\\server\\chunks\\577.js:10:42092)\n' +
+    '    at async q (C:\\Apps\\Sotkon-Planning\\.next\\standalone\\.next\\server\\chunks\\577.js:10:34982)\n' +
+    '    at async g (C:\\Apps\\Sotkon-Planning\\.next\\standalone\\.next\\server\\chunks\\577.js:1:1891)\n' +
+    '    at async a.length.b (C:\\Apps\\Sotkon-Planning\\.next\\standalone\\.next\\server\\chunks\\577.js:1:3332)\n' +
+    '    at async rN.do (C:\\Apps\\Sotkon-Planning\\.next\\standalone\\node_modules\\next\\dist\\compiled\\next-server\\app-route.runtime.prod.js:5:21042)\n' +
+    '    at async rN.handle (C:\\Apps\\Sotkon-Planning\\.next\\standalone\\node_modules\\next\\dist\\compiled\\next-server\\app-route.runtime.prod.js:5:25860)\n' +
+    '    at async k (C:\\Apps\\Sotkon-Planning\\.next\\standalone\\.next\\server\\app\\api\\auth\\[...nextauth]\\route.js:1:4237)\n' +
+    '    at async rN.handleResponse (C:\\Apps\\Sotkon-Planning\\.next\\standalone\\node_modules\\next\\dist\\compiled\\next-server\\app-route.runtime.prod.js:1:105568)\n' +
+    '    at async g (C:\\Apps\\Sotkon-Planning\\.next\\standalone\\.next\\server\\app\\api\\auth\\[...nextauth]\\route.js:1:5240)\n' +
+    '    at async D (C:\\Apps\\Sotkon-Planning\\.next\\standalone\\.next\\server\\app\\api\\auth\\[...nextauth]\\route.js:1:6362)',
+  name: 'h'
+}
