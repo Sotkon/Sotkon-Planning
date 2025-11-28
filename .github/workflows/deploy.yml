@@ -34,46 +34,41 @@ jobs:
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           NODE_ENV: production
           
-      - name: Stop service before copying files
+      - name: Stop service and copy build to production
         run: |
           Write-Output "Stopping service..."
           C:\Apps\nssm.exe stop PlanningApp
-          
-          Start-Sleep -Seconds 5
-          $status = C:\Apps\nssm.exe status PlanningApp
-          Write-Output "Service status after stop: $status"
-          
-          Write-Output "Waiting for file handles to be released..."
           Start-Sleep -Seconds 15
-        continue-on-error: true
-        
-      - name: Copy entire build to production directory
-        run: |
+          
+          $status = C:\Apps\nssm.exe status PlanningApp
+          Write-Output "Service status: $status"
+          
           Write-Output "Copying complete standalone build to production..."
           
           if (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone") {
             Write-Output "Removing old standalone build..."
-            Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force
           }
           
-          Write-Output "Copying new standalone build..."
-          Copy-Item -Path ".next\standalone" -Destination "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force
+          Write-Output "Copying new standalone build from: $env:GITHUB_WORKSPACE\.next\standalone"
+          Copy-Item -Path "$env:GITHUB_WORKSPACE\.next\standalone" -Destination "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force
           
-          if (Test-Path "public") {
+          if (Test-Path "$env:GITHUB_WORKSPACE\public") {
             Write-Output "Copying public folder..."
-            Copy-Item -Path "public" -Destination "C:\Apps\Sotkon-Planning\.next\standalone\public" -Recurse -Force
+            Copy-Item -Path "$env:GITHUB_WORKSPACE\public" -Destination "C:\Apps\Sotkon-Planning\.next\standalone\public" -Recurse -Force
           }
           
-          if (Test-Path ".next\static") {
+          if (Test-Path "$env:GITHUB_WORKSPACE\.next\static") {
             Write-Output "Copying static folder..."
-            Copy-Item -Path ".next\static" -Destination "C:\Apps\Sotkon-Planning\.next\standalone\.next\static" -Recurse -Force
+            Copy-Item -Path "$env:GITHUB_WORKSPACE\.next\static" -Destination "C:\Apps\Sotkon-Planning\.next\standalone\.next\static" -Recurse -Force
           }
           
-          Write-Output "All files copied successfully!"
+          $buildId = Get-Content "C:\Apps\Sotkon-Planning\.next\standalone\.next\BUILD_ID"
+          Write-Output "Files copied successfully! New BUILD_ID: $buildId"
+        continue-on-error: false
           
       - name: Start service
         run: C:\Apps\nssm.exe start PlanningApp
-        continue-on-error: true
         
       - name: Wait for service to start
         run: Start-Sleep -Seconds 15
@@ -93,7 +88,8 @@ jobs:
             
             if ($status -eq "SERVICE_RUNNING") {
               $running = $true
-              Write-Output "✅ Deploy successful! Service is running."
+              $buildId = Get-Content "C:\Apps\Sotkon-Planning\.next\standalone\.next\BUILD_ID"
+              Write-Output "✅ Deploy successful! Service is running with BUILD_ID: $buildId"
             } else {
               if ($attempt -lt $maxAttempts) {
                 Write-Output "Service not ready yet, waiting 5 seconds..."
