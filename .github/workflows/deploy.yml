@@ -34,6 +34,33 @@ jobs:
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           NODE_ENV: production
           
+      - name: Copy static files for standalone
+        run: |
+          Write-Output "Copying static files for standalone build..."
+          
+          # Copy public folder
+          if (Test-Path "public") {
+            Write-Output "Copying public folder..."
+            if (Test-Path ".next/standalone/public") {
+              Remove-Item -Path ".next/standalone/public" -Recurse -Force
+            }
+            Copy-Item -Path "public" -Destination ".next/standalone/public" -Recurse -Force
+            Write-Output "Public folder copied successfully"
+          }
+          
+          # Copy static folder
+          if (Test-Path ".next/static") {
+            Write-Output "Copying static folder..."
+            if (Test-Path ".next/standalone/.next/static") {
+              Remove-Item -Path ".next/standalone/.next/static" -Recurse -Force
+            }
+            New-Item -ItemType Directory -Path ".next/standalone/.next" -Force | Out-Null
+            Copy-Item -Path ".next/static" -Destination ".next/standalone/.next/static" -Recurse -Force
+            Write-Output "Static folder copied successfully"
+          }
+          
+          Write-Output "All files copied successfully!"
+          
       - name: Stop service
         run: C:\Apps\nssm.exe stop PlanningApp
         continue-on-error: true

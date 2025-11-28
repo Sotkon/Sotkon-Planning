@@ -1,6 +1,6 @@
 ﻿/** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Removed standalone for simpler deployment
+  output: 'standalone',
   eslint: {
     ignoreDuringBuilds: true,
   },
