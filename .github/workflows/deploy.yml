@@ -39,16 +39,40 @@ jobs:
         continue-on-error: true
         
       - name: Wait for service to stop
-        run: Start-Sleep -Seconds 5
+        run: Start-Sleep -Seconds 10
         
       - name: Start service
         run: C:\Apps\nssm.exe start PlanningApp
+        continue-on-error: true
+        
+      - name: Wait for service to start
+        run: Start-Sleep -Seconds 15
         
       - name: Verify service is running
         run: |
-          $status = C:\Apps\nssm.exe status PlanningApp
-          if ($status -ne "SERVICE_RUNNING") {
-            Write-Error "Service failed to start!"
+          $maxAttempts = 6
+          $attempt = 0
+          $running = $false
+          
+          while ($attempt -lt $maxAttempts -and -not $running) {
+            $attempt++
+            Write-Output "Checking service status (attempt $attempt/$maxAttempts)..."
+            
+            $status = C:\Apps\nssm.exe status PlanningApp
+            Write-Output "Status: $status"
+            
+            if ($status -eq "SERVICE_RUNNING") {
+              $running = $true
+              Write-Output "✅ Deploy successful! Service is running."
+            } else {
+              if ($attempt -lt $maxAttempts) {
+                Write-Output "Service not ready yet, waiting 5 seconds..."
+                Start-Sleep -Seconds 5
+              }
+            }
+          }
+          
+          if (-not $running) {
+            Write-Error "Service failed to start after $maxAttempts attempts!"
             exit 1
           }
-          Write-Output "Deploy successful! Service is running."
