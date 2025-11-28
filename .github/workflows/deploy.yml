@@ -38,16 +38,39 @@ jobs:
         run: |
           Write-Output "Stopping service..."
           C:\Apps\nssm.exe stop PlanningApp
-          Start-Sleep -Seconds 15
+          Start-Sleep -Seconds 20
           
           $status = C:\Apps\nssm.exe status PlanningApp
           Write-Output "Service status: $status"
+          
+          Write-Output "Waiting for file handles to be fully released..."
+          Start-Sleep -Seconds 10
           
           Write-Output "Copying complete standalone build to production..."
           
           if (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone") {
             Write-Output "Removing old standalone build..."
-            Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force
+            
+            $maxAttempts = 3
+            $attempt = 0
+            $removed = $false
+            
+            while ($attempt -lt $maxAttempts -and -not $removed) {
+              $attempt++
+              try {
+                Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force -ErrorAction Stop
+                $removed = $true
+                Write-Output "Old build removed successfully"
+              } catch {
+                if ($attempt -lt $maxAttempts) {
+                  Write-Output "Failed to remove (attempt $attempt/$maxAttempts), waiting 10 more seconds..."
+                  Start-Sleep -Seconds 10
+                } else {
+                  Write-Output "Warning: Could not remove some files, proceeding anyway..."
+                  Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force -ErrorAction SilentlyContinue
+                }
+              }
+            }
           }
           
           Write-Output "Copying new standalone build from: $env:GITHUB_WORKSPACE\.next\standalone"
