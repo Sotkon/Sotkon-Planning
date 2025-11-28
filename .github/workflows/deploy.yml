@@ -34,40 +34,41 @@ jobs:
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           NODE_ENV: production
           
-      - name: Copy static files for standalone
-        run: |
-          Write-Output "Copying static files for standalone build..."
-          
-          # Copy public folder
-          if (Test-Path "public") {
-            Write-Output "Copying public folder..."
-            if (Test-Path ".next/standalone/public") {
-              Remove-Item -Path ".next/standalone/public" -Recurse -Force
-            }
-            Copy-Item -Path "public" -Destination ".next/standalone/public" -Recurse -Force
-            Write-Output "Public folder copied successfully"
-          }
-          
-          # Copy static folder
-          if (Test-Path ".next/static") {
-            Write-Output "Copying static folder..."
-            if (Test-Path ".next/standalone/.next/static") {
-              Remove-Item -Path ".next/standalone/.next/static" -Recurse -Force
-            }
-            New-Item -ItemType Directory -Path ".next/standalone/.next" -Force | Out-Null
-            Copy-Item -Path ".next/static" -Destination ".next/standalone/.next/static" -Recurse -Force
-            Write-Output "Static folder copied successfully"
-          }
-          
-          Write-Output "All files copied successfully!"
-          
-      - name: Stop service
+      - name: Stop service before copying files
         run: C:\Apps\nssm.exe stop PlanningApp
         continue-on-error: true
         
       - name: Wait for service to stop
         run: Start-Sleep -Seconds 10
         
+      - name: Copy entire build to production directory
+        run: |
+          Write-Output "Copying complete standalone build to production..."
+          
+          # Remove old standalone build
+          if (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone") {
+            Write-Output "Removing old standalone build..."
+            Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force
+          }
+          
+          # Copy new standalone build
+          Write-Output "Copying new standalone build..."
+          Copy-Item -Path ".next\standalone" -Destination "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force
+          
+          # Copy public folder
+          if (Test-Path "public") {
+            Write-Output "Copying public folder..."
+            Copy-Item -Path "public" -Destination "C:\Apps\Sotkon-Planning\.next\standalone\public" -Recurse -Force
+          }
+          
+          # Copy static folder
+          if (Test-Path ".next\static") {
+            Write-Output "Copying static folder..."
+            Copy-Item -Path ".next\static" -Destination "C:\Apps\Sotkon-Planning\.next\standalone\.next\static" -Recurse -Force
+          }
+          
+          Write-Output "All files copied successfully!"
+          
       - name: Start service
         run: C:\Apps\nssm.exe start PlanningApp
         continue-on-error: true
