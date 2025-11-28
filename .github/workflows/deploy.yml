@@ -34,13 +34,20 @@ jobs:
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           NODE_ENV: production
           
-      - name: Stop service before copying files
-        run: C:\Apps\nssm.exe stop PlanningApp
-        continue-on-error: true
-        
-      - name: Wait for service to stop
-        run: Start-Sleep -Seconds 10
-        
+	- name: Stop service before copying files
+        run: |
+          Write-Output "Stopping service..."
+          C:\Apps\nssm.exe stop PlanningApp
+          
+          # Wait and verify it stopped
+          Start-Sleep -Seconds 5
+          $status = C:\Apps\nssm.exe status PlanningApp
+          Write-Output "Service status after stop: $status"
+          
+          # Wait extra time to ensure files are released
+          Write-Output "Waiting for file handles to be released..."
+          Start-Sleep -Seconds 15
+          
       - name: Copy entire build to production directory
         run: |
           Write-Output "Copying complete standalone build to production..."
