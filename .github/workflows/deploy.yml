@@ -34,41 +34,36 @@ jobs:
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           NODE_ENV: production
           
-	- name: Stop service before copying files
+      - name: Stop service before copying files
         run: |
           Write-Output "Stopping service..."
           C:\Apps\nssm.exe stop PlanningApp
           
-          # Wait and verify it stopped
           Start-Sleep -Seconds 5
           $status = C:\Apps\nssm.exe status PlanningApp
           Write-Output "Service status after stop: $status"
           
-          # Wait extra time to ensure files are released
           Write-Output "Waiting for file handles to be released..."
           Start-Sleep -Seconds 15
-          
+        continue-on-error: true
+        
       - name: Copy entire build to production directory
         run: |
           Write-Output "Copying complete standalone build to production..."
           
-          # Remove old standalone build
           if (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone") {
             Write-Output "Removing old standalone build..."
-            Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force
+            Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force -ErrorAction SilentlyContinue
           }
           
-          # Copy new standalone build
           Write-Output "Copying new standalone build..."
           Copy-Item -Path ".next\standalone" -Destination "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force
           
-          # Copy public folder
           if (Test-Path "public") {
             Write-Output "Copying public folder..."
             Copy-Item -Path "public" -Destination "C:\Apps\Sotkon-Planning\.next\standalone\public" -Recurse -Force
           }
           
-          # Copy static folder
           if (Test-Path ".next\static") {
             Write-Output "Copying static folder..."
             Copy-Item -Path ".next\static" -Destination "C:\Apps\Sotkon-Planning\.next\standalone\.next\static" -Recurse -Force
