@@ -1,0 +1,49 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Build project
+        run: npm run build
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          NODE_ENV: production
+          
+      - name: Stop service
+        run: C:\Apps\nssm.exe stop PlanningApp
+        continue-on-error: true
+        
+      - name: Wait for service to stop
+        run: Start-Sleep -Seconds 5
+        
+      - name: Start service
+        run: C:\Apps\nssm.exe start PlanningApp
+        
+      - name: Verify service is running
+        run: |
+          $status = C:\Apps\nssm.exe status PlanningApp
+          if ($status -ne "SERVICE_RUNNING") {
+            Write-Error "Service failed to start!"
+            exit 1
+          }
+          Write-Output "Deploy successful! Service is running."
