@@ -34,7 +34,7 @@ jobs:
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           NODE_ENV: production
           
-      - name: Stop service and copy build to production
+      - name: Stop service and deploy build
         run: |
           Write-Output "Stopping service..."
           C:\Apps\nssm.exe stop PlanningApp
@@ -46,33 +46,27 @@ jobs:
           Write-Output "Waiting for file handles to be fully released..."
           Start-Sleep -Seconds 10
           
-          Write-Output "Copying complete standalone build to production..."
+          Write-Output "Deploying new build..."
           
+          # Cleanup old backup if exists
+          if (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone.old") {
+            Write-Output "Removing previous backup..."
+            Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone.old" -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          
+          # Rename current to .old (faster and more reliable than delete)
           if (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone") {
-            Write-Output "Removing old standalone build..."
+            Write-Output "Moving current build to backup..."
             
-            $maxAttempts = 3
-            $attempt = 0
-            $removed = $false
-            
-            while ($attempt -lt $maxAttempts -and -not $removed) {
-              $attempt++
-              try {
-                Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force -ErrorAction Stop
-                $removed = $true
-                Write-Output "Old build removed successfully"
-              } catch {
-                if ($attempt -lt $maxAttempts) {
-                  Write-Output "Failed to remove (attempt $attempt/$maxAttempts), waiting 10 more seconds..."
-                  Start-Sleep -Seconds 10
-                } else {
-                  Write-Output "Warning: Could not remove some files, proceeding anyway..."
-                  Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force -ErrorAction SilentlyContinue
-                }
-              }
+            try {
+              Rename-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -NewName "standalone.old" -Force -ErrorAction Stop
+              Write-Output "Current build backed up successfully"
+            } catch {
+              Write-Output "Warning: Could not rename current build, attempting direct copy..."
             }
           }
           
+          # Copy new build
           Write-Output "Copying new standalone build from: $env:GITHUB_WORKSPACE\.next\standalone"
           Copy-Item -Path "$env:GITHUB_WORKSPACE\.next\standalone" -Destination "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force
           
@@ -87,7 +81,7 @@ jobs:
           }
           
           $buildId = Get-Content "C:\Apps\Sotkon-Planning\.next\standalone\.next\BUILD_ID"
-          Write-Output "Files copied successfully! New BUILD_ID: $buildId"
+          Write-Output "✅ Files copied successfully! New BUILD_ID: $buildId"
         continue-on-error: false
           
       - name: Start service
@@ -125,3 +119,12 @@ jobs:
             Write-Error "Service failed to start after $maxAttempts attempts!"
             exit 1
           }
+          
+      - name: Cleanup old build in background
+        run: |
+          if (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone.old") {
+            Write-Output "Cleaning up old build backup..."
+            Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone.old" -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Output "Cleanup completed"
+          }
+        continue-on-error: true
