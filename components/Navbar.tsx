@@ -27,7 +27,7 @@ export default function Navbar() {
               href="/cargas"
               className="px-4 py-2 rounded hover:bg-green-700 font-medium transition text-white"
             >
-              Encomendas de Cliente
+              Encomendas de Cliente de
             </Link>
             <Link
               href="/autocontrolo"
