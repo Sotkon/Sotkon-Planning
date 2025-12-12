@@ -66,37 +66,52 @@ jobs:
           }
           
           Write-Output "Waiting for file handles to be fully released..."
-          Start-Sleep -Seconds 10
+          Start-Sleep -Seconds 15
           
           Write-Output "Deploying new build..."
           
-          # Delete old build entirely (more reliable than rename)
+          # Use Robocopy to mirror/purge the directory (handles locked files better)
           if (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone") {
-            Write-Output "Removing old build completely..."
-            Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 5
-            Write-Output "Old build removed"
+            Write-Output "Purging old build with Robocopy..."
+            
+            # Create empty temp directory to mirror from (effectively deletes everything)
+            $tempEmpty = New-Item -Path "$env:TEMP\empty_deploy_$(Get-Date -Format 'yyyyMMddHHmmss')" -ItemType Directory -Force
+            
+            # Mirror empty directory to standalone (deletes all content)
+            robocopy $tempEmpty.FullName "C:\Apps\Sotkon-Planning\.next\standalone" /MIR /R:3 /W:5 /NFL /NDL /NJH /NJS | Out-Null
+            
+            # Clean up temp directory
+            Remove-Item $tempEmpty.FullName -Force -ErrorAction SilentlyContinue
+            
+            Write-Output "Old build purged successfully"
+            Start-Sleep -Seconds 3
           }
           
-          # Create fresh directory
-          New-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -ItemType Directory -Force | Out-Null
+          # Ensure directory exists
+          if (-not (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone")) {
+            New-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -ItemType Directory -Force | Out-Null
+          }
           
-          # Copy new build
-          Write-Output "Copying new standalone build from: $env:GITHUB_WORKSPACE\.next\standalone"
-          Copy-Item -Path "$env:GITHUB_WORKSPACE\.next\standalone\*" -Destination "C:\Apps\Sotkon-Planning\.next\standalone\" -Recurse -Force
+          # Use Robocopy to copy new build (more reliable than Copy-Item for large directories)
+          Write-Output "Deploying new standalone build..."
+          robocopy "$env:GITHUB_WORKSPACE\.next\standalone" "C:\Apps\Sotkon-Planning\.next\standalone" /E /R:3 /W:5 /NFL /NDL /NJH /NJS
+          if ($LASTEXITCODE -gt 7) {
+            Write-Error "Robocopy failed with exit code: $LASTEXITCODE"
+            exit 1
+          }
           
           if (Test-Path "$env:GITHUB_WORKSPACE\public") {
             Write-Output "Copying public folder..."
-            Copy-Item -Path "$env:GITHUB_WORKSPACE\public" -Destination "C:\Apps\Sotkon-Planning\.next\standalone\public" -Recurse -Force
+            robocopy "$env:GITHUB_WORKSPACE\public" "C:\Apps\Sotkon-Planning\.next\standalone\public" /E /R:3 /W:5 /NFL /NDL /NJH /NJS
           }
           
           if (Test-Path "$env:GITHUB_WORKSPACE\.next\static") {
             Write-Output "Copying static folder..."
-            Copy-Item -Path "$env:GITHUB_WORKSPACE\.next\static" -Destination "C:\Apps\Sotkon-Planning\.next\standalone\.next\static" -Recurse -Force
+            robocopy "$env:GITHUB_WORKSPACE\.next\static" "C:\Apps\Sotkon-Planning\.next\standalone\.next\static" /E /R:3 /W:5 /NFL /NDL /NJH /NJS
           }
           
           $buildId = Get-Content "C:\Apps\Sotkon-Planning\.next\standalone\.next\BUILD_ID"
-          Write-Output "✅ Files copied successfully! New BUILD_ID: $buildId"
+          Write-Output "✅ Files deployed successfully! New BUILD_ID: $buildId"
         continue-on-error: false
           
       - name: Start service
