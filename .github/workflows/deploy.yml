@@ -26,7 +26,7 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
       
-      # 🔥 NEW: Clean Next.js cache before building
+      # Clean Next.js cache before building
       - name: Clean build cache
         run: |
           Write-Output "🧹 Cleaning Next.js build cache..."
@@ -56,32 +56,34 @@ jobs:
           $status = C:\Apps\nssm.exe status PlanningApp
           Write-Output "Service status: $status"
           
+          # Force kill any remaining Node processes
+          Write-Output "Checking for lingering Node.js processes..."
+          $nodeProcesses = Get-Process -Name "node" -ErrorAction SilentlyContinue
+          if ($nodeProcesses) {
+            Write-Output "Found $($nodeProcesses.Count) Node.js process(es), force stopping..."
+            Stop-Process -Name "node" -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 5
+          }
+          
           Write-Output "Waiting for file handles to be fully released..."
           Start-Sleep -Seconds 10
           
           Write-Output "Deploying new build..."
           
-          # Cleanup old backup if exists
-          if (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone.old") {
-            Write-Output "Removing previous backup..."
-            Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone.old" -Recurse -Force -ErrorAction SilentlyContinue
+          # Delete old build entirely (more reliable than rename)
+          if (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone") {
+            Write-Output "Removing old build completely..."
+            Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 5
+            Write-Output "Old build removed"
           }
           
-          # Rename current to .old (faster and more reliable than delete)
-          if (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone") {
-            Write-Output "Moving current build to backup..."
-            
-            try {
-              Rename-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -NewName "standalone.old" -Force -ErrorAction Stop
-              Write-Output "Current build backed up successfully"
-            } catch {
-              Write-Output "Warning: Could not rename current build, attempting direct copy..."
-            }
-          }
+          # Create fresh directory
+          New-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -ItemType Directory -Force | Out-Null
           
           # Copy new build
           Write-Output "Copying new standalone build from: $env:GITHUB_WORKSPACE\.next\standalone"
-          Copy-Item -Path "$env:GITHUB_WORKSPACE\.next\standalone" -Destination "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force
+          Copy-Item -Path "$env:GITHUB_WORKSPACE\.next\standalone\*" -Destination "C:\Apps\Sotkon-Planning\.next\standalone\" -Recurse -Force
           
           if (Test-Path "$env:GITHUB_WORKSPACE\public") {
             Write-Output "Copying public folder..."
@@ -132,12 +134,3 @@ jobs:
             Write-Error "Service failed to start after $maxAttempts attempts!"
             exit 1
           }
-          
-      - name: Cleanup old build in background
-        run: |
-          if (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone.old") {
-            Write-Output "Cleaning up old build backup..."
-            Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone.old" -Recurse -Force -ErrorAction SilentlyContinue
-            Write-Output "Cleanup completed"
-          }
-        continue-on-error: true
