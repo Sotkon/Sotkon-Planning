@@ -50,115 +50,109 @@ jobs:
       - name: Stop service and deploy build
         run: |
           Write-Output "============================================"
-          Write-Output "🚀 STARTING DEPLOYMENT PROCESS"
+          Write-Output "STARTING DEPLOYMENT PROCESS"
           Write-Output "============================================"
+          Write-Output ""
           
-          # Stop service
-          Write-Output "`n📛 Stopping service..."
+          Write-Output "Stopping service..."
           C:\Apps\nssm.exe stop PlanningApp
           Start-Sleep -Seconds 20
           
           $status = C:\Apps\nssm.exe status PlanningApp
           Write-Output "Service status: $status"
+          Write-Output ""
           
-          # Force kill Node processes
-          Write-Output "`n💀 Checking for lingering Node.js processes..."
+          Write-Output "Checking for lingering Node.js processes..."
           $nodeProcesses = Get-Process -Name "node" -ErrorAction SilentlyContinue
           if ($nodeProcesses) {
             Write-Output "Found $($nodeProcesses.Count) Node.js process(es), force stopping..."
             Stop-Process -Name "node" -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 5
-            Write-Output "✅ Processes killed"
+            Write-Output "Processes killed"
           } else {
-            Write-Output "✅ No lingering processes"
+            Write-Output "No lingering processes"
           }
+          Write-Output ""
           
-          Write-Output "`n⏳ Waiting for file handles to release..."
+          Write-Output "Waiting for file handles to release..."
           Start-Sleep -Seconds 15
-          Write-Output "✅ Wait complete"
+          Write-Output "Wait complete"
+          Write-Output ""
           
-          # Verify source build exists
-          Write-Output "`n🔍 Verifying source build..."
+          Write-Output "Verifying source build..."
           if (Test-Path "$env:GITHUB_WORKSPACE\.next\standalone") {
-            Write-Output "✅ Source build found at: $env:GITHUB_WORKSPACE\.next\standalone"
+            Write-Output "Source build found at: $env:GITHUB_WORKSPACE\.next\standalone"
             
-            # Show what's in the source build
             $sourceBuildId = Get-Content "$env:GITHUB_WORKSPACE\.next\standalone\.next\BUILD_ID" -ErrorAction SilentlyContinue
             Write-Output "Source BUILD_ID: $sourceBuildId"
             
-            # Check for Navbar in source
             $navbarCheck = Select-String -Path "$env:GITHUB_WORKSPACE\components\Navbar.tsx" -Pattern "Encomendas de Cliente" -ErrorAction SilentlyContinue
             if ($navbarCheck) {
-              Write-Output "✅ 'Encomendas de Cliente' found in source Navbar"
+              Write-Output "'Encomendas de Cliente' found in source Navbar"
             } else {
-              Write-Output "⚠️  'Encomendas de Cliente' NOT found in source Navbar"
+              Write-Output "WARNING: 'Encomendas de Cliente' NOT found in source Navbar"
             }
           } else {
-            Write-Error "❌ Source build not found!"
+            Write-Error "Source build not found!"
             exit 1
           }
+          Write-Output ""
           
-          # Deploy
-          Write-Output "`n📤 Deploying to production..."
+          Write-Output "Deploying to production..."
+          Write-Output ""
           
-          # Remove old build
           if (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone") {
             Write-Output "Removing old production build..."
             Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 5
-            Write-Output "✅ Old build removed"
+            Write-Output "Old build removed"
           }
           
-          # Ensure parent directory exists
           if (-not (Test-Path "C:\Apps\Sotkon-Planning\.next")) {
             New-Item -Path "C:\Apps\Sotkon-Planning\.next" -ItemType Directory -Force | Out-Null
           }
           
-          # Copy with robocopy (verbose output)
-          Write-Output "`nCopying standalone build..."
-          $robocopyOutput = robocopy "$env:GITHUB_WORKSPACE\.next\standalone" "C:\Apps\Sotkon-Planning\.next\standalone" /E /R:3 /W:5
-          Write-Output $robocopyOutput
+          Write-Output "Copying standalone build..."
+          robocopy "$env:GITHUB_WORKSPACE\.next\standalone" "C:\Apps\Sotkon-Planning\.next\standalone" /E /R:3 /W:5
           
           if ($LASTEXITCODE -gt 7) {
-            Write-Error "❌ Robocopy standalone failed with exit code: $LASTEXITCODE"
+            Write-Error "Robocopy standalone failed with exit code: $LASTEXITCODE"
             exit 1
           }
-          Write-Output "✅ Standalone copied"
+          Write-Output "Standalone copied"
+          Write-Output ""
           
-          # Copy public
           if (Test-Path "$env:GITHUB_WORKSPACE\public") {
-            Write-Output "`nCopying public folder..."
-            $robocopyOutput = robocopy "$env:GITHUB_WORKSPACE\public" "C:\Apps\Sotkon-Planning\.next\standalone\public" /E /R:3 /W:5
-            Write-Output $robocopyOutput
-            Write-Output "✅ Public copied"
+            Write-Output "Copying public folder..."
+            robocopy "$env:GITHUB_WORKSPACE\public" "C:\Apps\Sotkon-Planning\.next\standalone\public" /E /R:3 /W:5
+            Write-Output "Public copied"
           }
+          Write-Output ""
           
-          # Copy static
           if (Test-Path "$env:GITHUB_WORKSPACE\.next\static") {
-            Write-Output "`nCopying static folder..."
-            $robocopyOutput = robocopy "$env:GITHUB_WORKSPACE\.next\static" "C:\Apps\Sotkon-Planning\.next\standalone\.next\static" /E /R:3 /W:5
-            Write-Output $robocopyOutput
-            Write-Output "✅ Static copied"
+            Write-Output "Copying static folder..."
+            robocopy "$env:GITHUB_WORKSPACE\.next\static" "C:\Apps\Sotkon-Planning\.next\standalone\.next\static" /E /R:3 /W:5
+            Write-Output "Static copied"
           }
+          Write-Output ""
           
-          # Verify deployment
-          Write-Output "`n🔍 Verifying deployment..."
+          Write-Output "Verifying deployment..."
           $deployedBuildId = Get-Content "C:\Apps\Sotkon-Planning\.next\standalone\.next\BUILD_ID" -ErrorAction SilentlyContinue
           Write-Output "Deployed BUILD_ID: $deployedBuildId"
           
           if ($deployedBuildId -eq $sourceBuildId) {
-            Write-Output "✅ BUILD_IDs match!"
+            Write-Output "BUILD_IDs match!"
           } else {
-            Write-Error "❌ BUILD_IDs don't match! Source: $sourceBuildId, Deployed: $deployedBuildId"
+            Write-Error "BUILD_IDs don't match! Source: $sourceBuildId, Deployed: $deployedBuildId"
             exit 1
           }
           
-          # Check deployed files
           $deployedFiles = Get-ChildItem "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse | Measure-Object
           Write-Output "Deployed $($deployedFiles.Count) files"
+          Write-Output ""
           
-          Write-Output "`n============================================"
-          Write-Output "✅ DEPLOYMENT COMPLETE!"
+          Write-Output "============================================"
+          Write-Output "DEPLOYMENT COMPLETE!"
           Write-Output "BUILD_ID: $deployedBuildId"
           Write-Output "============================================"
         continue-on-error: false
