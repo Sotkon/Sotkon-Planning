@@ -46,7 +46,7 @@ export default function Navbar() {
                 {openDropdown === 'dashboard' && (
                   <div className="absolute top-full left-0 mt-1 w-56 bg-gray-900 border border-gray-900 rounded-lg shadow-lg py-2 z-50">
                     <Link
-                      href="/dashboard/geral"
+                      href="/dashboard"
                       className="block px-4 py-2 hover:bg-gray-850 text-gray-100 transition"
                       onClick={closeDropdown}
                     >
@@ -109,56 +109,56 @@ export default function Navbar() {
                   </svg>
                 </button>
                 {openDropdown === 'produção' && (
-                  <div className="absolute top-full left-0 mt-1 w-56 bg-gray-900 border border-gray-900 rounded-lg shadow-lg py-2 z-50">
-                    <Link
-                      href="/encomendas/nova"
-                      className="block px-4 py-2 hover:bg-gray-850 text-gray-100 transition"
-                      onClick={closeDropdown}
-                    >
-                      Nova Encomenda
-                    </Link>
-                    <Link
+                   <Link
                       href="/cargas"
                       className="block px-4 py-2 hover:bg-gray-850 text-gray-100 transition"
                       onClick={closeDropdown}
                     >
                       Encomendas de Cliente
                     </Link>
+                    <div className="absolute top-full left-0 mt-1 w-56 bg-gray-900 border border-gray-900 rounded-lg shadow-lg py-2 z-50">
+                    <Link
+                      href="/encomendas/nova"
+                      className="block px-4 py-2 hover:bg-gray-850 text-gray-100 transition"
+                      onClick={closeDropdown}
+                    >
+                      Criar Encomenda de Cliente
+                    </Link>                   
                     <div className="border-t border-gray-900 my-2"></div>
+                    <Link
+                      href="/encomendas/planeamento"
+                      className="block px-4 py-2 hover:bg-gray-850 text-gray-100 transition"
+                      onClick={closeDropdown}
+                    >
+                      Planeamento
+                    </Link>
+                    <Link
+                      href="/encomendas/layout"
+                      className="block px-4 py-2 hover:bg-gray-850 text-gray-100 transition"
+                      onClick={closeDropdown}
+                    >
+                      Layout Chão de Fábrica
+                    </Link>
+                    <Link
+                      href="/encomendas/autocontrolo"
+                      className="block px-4 py-2 hover:bg-gray-850 text-gray-100 transition"
+                      onClick={closeDropdown}
+                    >
+                      Autocontrolo
+                    </Link>
                     <Link
                       href="/encomendas/pendentes"
                       className="block px-4 py-2 hover:bg-gray-850 text-gray-100 transition"
                       onClick={closeDropdown}
                     >
-                      Pendentes
-                    </Link>
-                    <Link
-                      href="/encomendas/em-preparacao"
-                      className="block px-4 py-2 hover:bg-gray-850 text-gray-100 transition"
-                      onClick={closeDropdown}
-                    >
-                      Em Preparação
-                    </Link>
-                    <Link
-                      href="/encomendas/prontas"
-                      className="block px-4 py-2 hover:bg-gray-850 text-gray-100 transition"
-                      onClick={closeDropdown}
-                    >
-                      Prontas para Envio
-                    </Link>
-                    <Link
-                      href="/encomendas/concluidas"
-                      className="block px-4 py-2 hover:bg-gray-850 text-gray-100 transition"
-                      onClick={closeDropdown}
-                    >
-                      Concluídas
+                      Pendentes de Fornecedores
                     </Link>
                     <Link
                       href="/encomendas/canceladas"
                       className="block px-4 py-2 hover:bg-gray-850 text-gray-100 transition"
                       onClick={closeDropdown}
                     >
-                      Canceladas
+                      ........
                     </Link>
                     <div className="border-t border-gray-900 my-2"></div>
                     <Link
@@ -166,7 +166,7 @@ export default function Navbar() {
                       className="block px-4 py-2 hover:bg-gray-850 text-gray-100 transition"
                       onClick={closeDropdown}
                     >
-                      Gestão de Clientes
+                      .........
                     </Link>
                   </div>
                 )}
