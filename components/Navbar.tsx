@@ -85,16 +85,16 @@ export default function Navbar() {
                 )}
               </div>
 
-              {/* Encomendas Dropdown */}
+              {/* Produção Dropdown */}
               <div className="relative">
                 <button
-                  onClick={() => toggleDropdown('encomendas')}
+                  onClick={() => toggleDropdown('produção')}
                   className="px-4 py-2 rounded hover:bg-gray-850 font-medium transition text-gray-100 flex items-center gap-1"
                 >
-                  Encomendas
+                  Produção
                   <svg
                     className={`w-4 h-4 transition-transform ${
-                      openDropdown === 'encomendas' ? 'rotate-180' : ''
+                      openDropdown === 'produção' ? 'rotate-180' : ''
                     }`}
                     fill="none"
                     stroke="currentColor"
@@ -108,7 +108,7 @@ export default function Navbar() {
                     />
                   </svg>
                 </button>
-                {openDropdown === 'encomendas' && (
+                {openDropdown === 'produção' && (
                   <div className="absolute top-full left-0 mt-1 w-56 bg-gray-900 border border-gray-900 rounded-lg shadow-lg py-2 z-50">
                     <Link
                       href="/encomendas/nova"
@@ -118,11 +118,11 @@ export default function Navbar() {
                       Nova Encomenda
                     </Link>
                     <Link
-                      href="/encomendas/lista"
+                      href="/dashboard"
                       className="block px-4 py-2 hover:bg-gray-850 text-gray-100 transition"
                       onClick={closeDropdown}
                     >
-                      Todas as Encomendas
+                      Encomendas de Cliente
                     </Link>
                     <div className="border-t border-gray-900 my-2"></div>
                     <Link
