@@ -25,6 +25,19 @@ jobs:
         run: npx prisma generate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      
+      # 🔥 NEW: Clean Next.js cache before building
+      - name: Clean build cache
+        run: |
+          Write-Output "🧹 Cleaning Next.js build cache..."
+          if (Test-Path ".next") {
+            Remove-Item -Path ".next" -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Output "✅ Removed .next cache"
+          }
+          Write-Output "🧹 Cleaning npm cache..."
+          npm cache clean --force
+          Write-Output "✅ Cache cleaning completed"
+        continue-on-error: false
         
       - name: Build project
         run: npm run build
