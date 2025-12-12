@@ -116,7 +116,7 @@ export default function Navbar() {
                     >
                       Encomendas de Cliente
                     </Link>
-                    <div className="absolute top-full left-0 mt-1 w-56 bg-gray-900 border border-gray-900 rounded-lg shadow-lg py-2 z-50">
+                    <div className="absolute top-full left-0 mt-1 w-56 bg-gray-900 border border-gray-900 rounded-lg shadow-lg py-2 z-50"></div>
                     <Link
                       href="/encomendas/nova"
                       className="block px-4 py-2 hover:bg-gray-850 text-gray-100 transition"
