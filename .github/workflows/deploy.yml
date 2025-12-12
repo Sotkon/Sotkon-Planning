@@ -101,19 +101,20 @@ jobs:
           Write-Output "Deploying to production..."
           Write-Output ""
           
+          # Take ownership and grant permissions (force access)
           if (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone") {
-            Write-Output "Removing old production build..."
-            Remove-Item -Path "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 5
-            Write-Output "Old build removed"
+            Write-Output "Taking ownership of deployment directory..."
+            takeown /F "C:\Apps\Sotkon-Planning\.next\standalone" /R /D Y 2>&1 | Out-Null
+            icacls "C:\Apps\Sotkon-Planning\.next\standalone" /grant "Everyone:(OI)(CI)F" /T /Q 2>&1 | Out-Null
+            Write-Output "Ownership granted"
           }
           
           if (-not (Test-Path "C:\Apps\Sotkon-Planning\.next")) {
             New-Item -Path "C:\Apps\Sotkon-Planning\.next" -ItemType Directory -Force | Out-Null
           }
           
-          Write-Output "Copying standalone build..."
-          robocopy "$env:GITHUB_WORKSPACE\.next\standalone" "C:\Apps\Sotkon-Planning\.next\standalone" /E /R:3 /W:5
+          Write-Output "Deploying standalone build (mirroring)..."
+          robocopy "$env:GITHUB_WORKSPACE\.next\standalone" "C:\Apps\Sotkon-Planning\.next\standalone" /MIR /R:3 /W:5
           
           if ($LASTEXITCODE -gt 7) {
             Write-Error "Robocopy standalone failed with exit code: $LASTEXITCODE"
@@ -124,14 +125,14 @@ jobs:
           
           if (Test-Path "$env:GITHUB_WORKSPACE\public") {
             Write-Output "Copying public folder..."
-            robocopy "$env:GITHUB_WORKSPACE\public" "C:\Apps\Sotkon-Planning\.next\standalone\public" /E /R:3 /W:5
+            robocopy "$env:GITHUB_WORKSPACE\public" "C:\Apps\Sotkon-Planning\.next\standalone\public" /MIR /R:3 /W:5
             Write-Output "Public copied"
           }
           Write-Output ""
           
           if (Test-Path "$env:GITHUB_WORKSPACE\.next\static") {
             Write-Output "Copying static folder..."
-            robocopy "$env:GITHUB_WORKSPACE\.next\static" "C:\Apps\Sotkon-Planning\.next\standalone\.next\static" /E /R:3 /W:5
+            robocopy "$env:GITHUB_WORKSPACE\.next\static" "C:\Apps\Sotkon-Planning\.next\standalone\.next\static" /MIR /R:3 /W:5
             Write-Output "Static copied"
           }
           Write-Output ""
@@ -155,6 +156,9 @@ jobs:
           Write-Output "DEPLOYMENT COMPLETE!"
           Write-Output "BUILD_ID: $deployedBuildId"
           Write-Output "============================================"
+          
+          # Explicitly exit with success code
+          exit 0
         continue-on-error: false
           
       - name: Start service
