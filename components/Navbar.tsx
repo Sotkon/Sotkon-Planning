@@ -4,8 +4,8 @@ import { signOut, useSession } from 'next-auth/react'
 import Link from 'next/link'
 
 export default function Navbar() {
+  const { data: session } = useSession()
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
-
   const toggleDropdown = (menu: string) => {
     setOpenDropdown(openDropdown === menu ? null : menu)
   }
