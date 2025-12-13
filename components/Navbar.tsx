@@ -109,7 +109,7 @@ export default function Navbar() {
                   </svg>
                 </button>
                 {openDropdown === 'produção' && (
-                  <div className="absolute top-full left-0 mt-1 w-56 bg-neutral-700 border border-gray-600 rounded-lg shadow-lg py-2 z-50">
+                  <div className="absolute top-full left-0 mt-1 w-65 bg-neutral-700 border border-gray-600 rounded-lg shadow-lg py-2 z-50">
                     <Link
                       href="/cargas"
                       className="block px-4 py-2 hover:bg-neutral-600 text-gray-100 transition"
