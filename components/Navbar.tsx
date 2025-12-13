@@ -118,7 +118,7 @@ export default function Navbar() {
                       Encomendas de Cliente
                     </Link>
                     <Link
-                      href="/nova-carga"
+                      href="/cargas/novo"
                       className="block px-4 py-2 hover:bg-neutral-600 text-gray-100 transition"
                       onClick={closeDropdown}
                     >
