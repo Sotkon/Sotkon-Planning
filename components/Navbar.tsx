@@ -88,7 +88,7 @@ export default function Navbar() {
               {/* Produção Dropdown */}
               <div className="relative">
                 <button
-                  onClick={() => toggleDropdown('producão')}
+                  onClick={() => toggleDropdown('produção')}
                   className="px-4 py-2 rounded hover:bg-neutral-700 font-medium transition text-gray-100 flex items-center gap-1"
                 >
                   Produção
