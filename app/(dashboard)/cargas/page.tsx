@@ -178,7 +178,7 @@ export default function CargasPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-neutral-800 p-6">
       <div className="max-w-[1800px] mx-auto">
         
         {/* Alerta Primavera */}
