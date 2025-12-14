@@ -172,7 +172,7 @@ export default function NovaCargaPage() {
       <div className="max-w-4xl mx-auto">
         
         {/* Header */}
-        <div className="bg-white shadow rounded-lg p-6 mb-6">
+        <div className="bg-neutral-800 border border-gray-100 shadow rounded-lg p-6 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
