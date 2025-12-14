@@ -23,7 +23,7 @@ export default function FilterBar({
   estados 
 }: FilterBarProps) {
   const [filters, setFilters] = useState<FilterValues>({
-    dataInicio: new Date().toISOString().split('T')[0].substring(0, 7) + '-01',
+    dataInicio: new Date().getFullYear() + '-01-01',
     countryId: 0,
     estadoId: 0,
     textToSearch: ''
