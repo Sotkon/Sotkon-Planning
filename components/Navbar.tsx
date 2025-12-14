@@ -15,7 +15,7 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className="bg-neutral-800 border-b border-neutral-700">
+      <nav className="sticky top-0 z-50 bg-neutral-800 border-b border-neutral-700">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-1">
