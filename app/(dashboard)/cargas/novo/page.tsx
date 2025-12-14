@@ -182,7 +182,7 @@ export default function NovaCargaPage() {
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <h1 className="text-2xl font-bold text-gray-100">
-                {isEdit ? 'Editar Carga' : 'Nova, Agendada, A Definir'}
+                {isEdit ? 'Editar Carga' : 'Nova Carga'}
               </h1>
             </div>
 
