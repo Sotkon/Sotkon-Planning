@@ -87,7 +87,7 @@ export default function FilterBar({
   };
 
   return (
-    <div className="bg-neutral-800 shadow rounded-lg p-6 mb-6">
+    <div className="bg-neutral-800 shadow rounded-lg p-6 mb-6 border border-white">
       <h6 className="text-lg font-semibold text-gray-100 mb-4">
         {language === 'pt' && 'Filtros'}
         {language === 'en' && 'General Dashboard Filter'}
