@@ -33,7 +33,7 @@ export default function FilterBar({
     pt: {
       inicio: 'Início',
       pais: 'Mercado',
-      estado: 'Estado',
+      estado: 'Estado da Encomenda de Cliente',
       atualizar: 'Atualizar',
       pesquisa: 'Pesquisar por cliente, encomenda, projeto ou localização...',
       pesquisar: 'Pesquisar',
