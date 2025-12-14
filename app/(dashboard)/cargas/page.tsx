@@ -200,7 +200,7 @@ export default function CargasPage() {
         )}
 
         {/* Header */}
-        <div className="bg-neutral-800 shadow rounded-lg p-6 mb-2">
+        <div className="bg-neutral-800 shadow rounded-lg p-6 mb-2 border border-white">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-gray-100">{t.title}</h1>
             <button
