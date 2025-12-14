@@ -200,13 +200,13 @@ export default function CargasPage() {
         )}
 
         {/* Header */}
-        <div className="bg-neutral-800 shadow rounded-lg p-2 mb-2">
+        <div className="bg-neutral-800 shadow rounded-lg p-6 mb-2">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-gray-100">{t.title}</h1>
             <button
               onClick={handleExport}
               disabled={isExporting}
-              className="flex items-center gap-2 px-4 py-2 text-orange-400 hover:text-orange-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 text-white hover:text-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title={t.exportar}
             >
               {isExporting ? (
