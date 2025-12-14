@@ -151,7 +151,7 @@ export default function FilterBar({
           <div>
             <button
               type="submit"
-              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+              className="px-6 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors font-medium"
             >
               {t.atualizar}
             </button>
@@ -171,7 +171,7 @@ export default function FilterBar({
           <button
             type="button"
             onClick={() => onFilterChange(filters)}
-            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+            className="px-6 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors font-medium"
           >
             {t.pesquisar}
           </button>
