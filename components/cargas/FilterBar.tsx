@@ -87,9 +87,9 @@ export default function FilterBar({
   };
 
   return (
-    <div className="bg-white shadow rounded-lg p-6 mb-6">
-      <h6 className="text-lg font-semibold text-gray-800 mb-4">
-        {language === 'pt' && 'Filtro de Encomendas de Cliente'}
+    <div className="bg-neutral-800 shadow rounded-lg p-6 mb-6">
+      <h6 className="text-lg font-semibold text-gray-100 mb-4">
+        {language === 'pt' && 'Filtros'}
         {language === 'en' && 'General Dashboard Filter'}
         {language === 'fr' && 'Filtre Général du Tableau de Bord'}
         {language === 'es' && 'Filtro General del Panel'}
@@ -99,7 +99,7 @@ export default function FilterBar({
         <div className="flex flex-wrap items-end gap-4">
           {/* Data Início */}
           <div className="flex-1 min-w-[150px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-100 mb-1">
               {t.inicio}
             </label>
             <input
@@ -112,7 +112,7 @@ export default function FilterBar({
 
           {/* País */}
           <div className="flex-1 min-w-[150px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-100 mb-1">
               {t.pais}
             </label>
             <select
@@ -131,7 +131,7 @@ export default function FilterBar({
 
           {/* Estado */}
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-100 mb-1">
               {t.estado}
             </label>
             <select
@@ -151,7 +151,7 @@ export default function FilterBar({
           <div>
             <button
               type="submit"
-              className="px-6 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors font-medium"
+              className="px-6 py-2 bg-orange-400 text-white rounded-md hover:bg-orange-500 transition-colors font-medium"
             >
               {t.atualizar}
             </button>
@@ -171,7 +171,7 @@ export default function FilterBar({
           <button
             type="button"
             onClick={() => onFilterChange(filters)}
-            className="px-6 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors font-medium"
+            className="px-6 py-2 bg-orange-400 text-white rounded-md hover:bg-orange-500 transition-colors font-medium"
           >
             {t.pesquisar}
           </button>
