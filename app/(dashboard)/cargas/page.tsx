@@ -27,7 +27,7 @@ export default function CargasPage() {
   // Traduções
   const translations: Record<string, any> = {
     pt: {
-      title: 'Lista de Cargas',
+      title: 'Lista de Encomendas de Cliente',
       loading: 'A carregar...',
       importando: 'Importando cargas do Primavera...',
       novasCargas: 'Foram adicionadas',
