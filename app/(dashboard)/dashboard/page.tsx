@@ -5,9 +5,18 @@ import { prisma } from '@/lib/prisma'
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
+  const currentYear = new Date().getFullYear()
   
   // Buscar estatísticas
-  const totalCargas = await prisma.tblPlanningCargas.count()
+  const totalCargas = await prisma.tblPlanningCargas.count({
+  where: { 
+    status: 'REALIZADA',
+    dateCreated: {
+      gte: new Date(`${currentYear}-01-01`),
+      lte: new Date(`${currentYear}-12-31`)
+    }
+  }
+})
   const cargasRecentes = await prisma.tblPlanningCargas.count({
     where: {
       dateCreated: {
@@ -27,8 +36,8 @@ export default async function DashboardPage() {
         <div className="bg-neutral-800 border border-gray-100 rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-6  00 text-sm">Total Encomendas de Cliente</p>
-              <p className="text-3xl font-bold text-gray-800">{totalCargas}</p>
+              <p className="text-gray-6  00 text-sm">Total de Encomendas de Cliente</p>
+              <p className="text-3xl font-bold text-gray-100">{totalCargas}</p>
             </div>
             <div className="bg-blue-100 p-4 rounded-full">
               <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
