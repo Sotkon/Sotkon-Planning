@@ -32,12 +32,12 @@ export default function FilterBar({
   const translations: Record<string, any> = {
     pt: {
       inicio: 'Início',
-      pais: 'País',
+      pais: 'Mercado',
       estado: 'Estado',
       atualizar: 'Atualizar',
       pesquisa: 'Pesquisar por cliente, encomenda, projeto ou localização...',
       pesquisar: 'Pesquisar',
-      todos: 'TODOS'
+      todos: 'Todos'
     },
     en: {
       inicio: 'Start',
@@ -89,7 +89,7 @@ export default function FilterBar({
   return (
     <div className="bg-white shadow rounded-lg p-6 mb-6">
       <h6 className="text-lg font-semibold text-gray-800 mb-4">
-        {language === 'pt' && 'Filtro Geral do Dashboard'}
+        {language === 'pt' && 'Filtro de Encomendas de Cliente'}
         {language === 'en' && 'General Dashboard Filter'}
         {language === 'fr' && 'Filtre Général du Tableau de Bord'}
         {language === 'es' && 'Filtro General del Panel'}
