@@ -98,7 +98,7 @@ export default function FilterBar({
       <form onSubmit={handleSubmit}>
         <div className="flex flex-wrap items-end gap-4">
           {/* Data Início */}
-          <div className="flex-1 min-w-[70px]">
+          <div className="flex-1 min-w-[100px]">
             <label className="block text-sm font-medium text-gray-100 mb-1">
               {t.inicio}
             </label>
@@ -111,7 +111,7 @@ export default function FilterBar({
           </div>
 
           {/* País */}
-          <div className="flex-1 min-w-[70px]">
+          <div className="flex-1 min-w-[100px]">
             <label className="block text-sm font-medium text-gray-100 mb-1">
               {t.pais}
             </label>
@@ -130,7 +130,7 @@ export default function FilterBar({
           </div>
 
           {/* Estado */}
-          <div className="flex-1 min-w-[180px]">
+          <div className="flex-1 min-w-[200px]">
             <label className="block text-sm font-medium text-gray-100 mb-1">
               {t.estado}
             </label>
