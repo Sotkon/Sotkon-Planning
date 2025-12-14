@@ -24,10 +24,10 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Card Total Cargas */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-neutral-800 border border-gray-100 rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600 text-sm">Total Cargas</p>
+              <p className="text-gray-6  00 text-sm">Total Encomendas de Cliente</p>
               <p className="text-3xl font-bold text-gray-800">{totalCargas}</p>
             </div>
             <div className="bg-blue-100 p-4 rounded-full">
