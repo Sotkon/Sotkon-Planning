@@ -11,11 +11,7 @@ export default async function DashboardPage() {
   const totalCargas = await prisma.tblPlanningCargas.count({
   where: { 
     estados: 'REALIZADA',
-    dateCreated: {
-      gte: new Date(`${currentYear}-01-01`),
-      lte: new Date(`${currentYear}-12-31`)
     }
-  }
 })
   const cargasRecentes = await prisma.tblPlanningCargas.count({
     where: {
