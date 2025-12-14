@@ -10,7 +10,7 @@ export default async function DashboardPage() {
   // Buscar estatísticas
   const totalCargas = await prisma.tblPlanningCargas.count({
   where: { 
-    estadoId: 4,
+    estadoId: -1,
     dateCreated: {
       gte: new Date(`${currentYear}-01-01`),
       lte: new Date(`${currentYear}-12-31`)
