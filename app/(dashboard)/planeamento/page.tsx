@@ -1,15 +1,8 @@
 'use client'
 
 import React, { useState } from 'react';
-// ... rest of your imports
 
-export default function YourComponent() {
-  const [state, setState] = useState(...)
-  // ... rest of your component
-}
-import React, { useState } from 'react';
-
-const DragDropCalendarBoard = () => {
+export default function DragDropCalendarBoard() {
   const [orders, setOrders] = useState([
     { id: 1, number: 'ORD-001', client: 'Client A', color: 'bg-blue-500' },
     { id: 2, number: 'ORD-002', client: 'Client B', color: 'bg-green-500' },
@@ -190,6 +183,4 @@ const DragDropCalendarBoard = () => {
       </div>
     </div>
   );
-};
-
-export default DragDropCalendarBoard;
+}
