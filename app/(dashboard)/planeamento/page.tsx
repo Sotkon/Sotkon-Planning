@@ -1,5 +1,5 @@
-// app/(dashboard)/autocontrolo/page.tsx
-export default function AutocontroloPage() {
+// app/(dashboard)/planeamento/page.tsx
+export default function PlaneamentoPage() {
   return (
     <div>
       <h1 className="text-3xl font-bold mb-6">Planeamento/h1>
