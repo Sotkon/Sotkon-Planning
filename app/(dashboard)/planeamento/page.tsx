@@ -15,7 +15,7 @@ const DragDropCalendarBoard = () => {
     queryKey: ['unscheduled-orders', language],
     queryFn: async () => {
       const params = new URLSearchParams({
-        dataInicio: new Date().getFullYear() + '-01-01',
+        dataPrevistaDeCarga: new Date().getFullYear() + '-01-01',
         language: language,
         estadoId: '0', // All states
         countryId: '0', // All countries
@@ -49,14 +49,14 @@ const DragDropCalendarBoard = () => {
   // Get color based on estado
   const getOrderColor = (estadoId) => {
     const colors = {
-      1: 'bg-yellow-500',    // AGENDADA
-      2: 'bg-blue-500',      // EM PRODUÇÃO
+      1: 'bg-yellow-400',    // NOVA
+      2: 'bg-blue-500',      // AGENDADA
       3: 'bg-purple-500',    // PRODUZIDA
       4: 'bg-orange-500',    // EM EXPEDIÇÃO
       5: 'bg-green-500',     // REALIZADA
       6: 'bg-red-500',       // CANCELADA
       7: 'bg-pink-500',      // FATURADA
-      8: 'bg-cyan-500'       // PAGA
+      8: 'bg-amber-700'       // A DEFINIR
     };
     return colors[estadoId] || 'bg-gray-500';
   };
