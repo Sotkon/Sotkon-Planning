@@ -1,516 +1,186 @@
-'use client';
+import React, { useState } from 'react';
 
-import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { Save, ArrowLeft, Trash2 } from 'lucide-react';
+const DragDropCalendarBoard = () => {
+  const [orders, setOrders] = useState([
+    { id: 1, number: 'ORD-001', client: 'Client A', color: 'bg-blue-500' },
+    { id: 2, number: 'ORD-002', client: 'Client B', color: 'bg-green-500' },
+    { id: 3, number: 'ORD-003', client: 'Client C', color: 'bg-purple-500' },
+    { id: 4, number: 'ORD-004', client: 'Client D', color: 'bg-orange-500' },
+    { id: 5, number: 'ORD-005', client: 'Client E', color: 'bg-pink-500' }
+  ]);
 
-export default function NovaCargaPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const id = searchParams.get('id');
-  const isEdit = !!id;
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [calendar, setCalendar] = useState({});
+  const [draggedOrder, setDraggedOrder] = useState(null);
 
-  const [formData, setFormData] = useState({
-    cliente: '',
-    paisId: 1,
-    encomendaDoCliente: '',
-    encomendaPrimavera: '',
-    projecto: '',
-    estadoId: 1,
-    dataPrevistaDeCarga: '',
-    horaPrevistaDeCarga: '09:00',
-    prazoDeEntregaPrevisto: '',
-    contactosParaEntrega: '',
-    mercadoria: '',
-    condicoesDePagamento: '',
-    mercadoriaQueFaltaEntregar: '',
-    localizacao: '',
-    transportador: '',
-    custos_de_transporte: '',
-    servicosARealizar: [] as number[]
-  });
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
 
-  // Fetch dados da carga (se edit)
-  const { data: cargaData } = useQuery({
-    queryKey: ['carga', id],
-    queryFn: async () => {
-      if (!id) return null;
-      const res = await fetch(`/api/cargas/${id}`);
-      if (!res.ok) throw new Error('Failed to fetch carga');
-      return res.json();
-    },
-    enabled: isEdit
-  });
+    return { daysInMonth, startingDayOfWeek, year, month };
+  };
 
-  // Fetch países
-  const { data: countries = [] } = useQuery({
-    queryKey: ['countries'],
-    queryFn: async () => {
-      const res = await fetch('/api/countries');
-      if (!res.ok) throw new Error('Failed to fetch countries');
-      return res.json();
-    }
-  });
+  const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentMonth);
 
-  // Fetch estados
-  const { data: estados = [] } = useQuery({
-    queryKey: ['estados', 'pt'],
-    queryFn: async () => {
-      const res = await fetch('/api/estados?language=pt');
-      if (!res.ok) throw new Error('Failed to fetch estados');
-      const data = await res.json();
-      return data.filter((e: any) => e.value > 0); // Remove "TODOS"
-    }
-  });
+  const handleDragStart = (e, order) => {
+    setDraggedOrder(order);
+    e.dataTransfer.effectAllowed = 'move';
+  };
 
-  // Fetch serviços
-  const { data: servicos = [] } = useQuery({
-    queryKey: ['servicos', 'pt'],
-    queryFn: async () => {
-      const res = await fetch('/api/servicos?language=pt');
-      if (!res.ok) throw new Error('Failed to fetch servicos');
-      return res.json();
-    }
-  });
-
-  // Preencher form se edit
-  useEffect(() => {
-    if (cargaData) {
-      setFormData({
-        cliente: cargaData.cliente || '',
-        paisId: cargaData.paisId || 1,
-        encomendaDoCliente: cargaData.encomendaDoCliente || '',
-        encomendaPrimavera: cargaData.encomendaPrimavera || '',
-        projecto: cargaData.projecto || '',
-        estadoId: cargaData.estadoId || 1,
-        dataPrevistaDeCarga: cargaData.dataPrevistaDeCarga || '',
-        horaPrevistaDeCarga: cargaData.horaPrevistaDeCarga || '09:00',
-        prazoDeEntregaPrevisto: cargaData.prazoDeEntregaPrevisto || '',
-        contactosParaEntrega: cargaData.contactosParaEntrega || '',
-        mercadoria: cargaData.mercadoria || '',
-        condicoesDePagamento: cargaData.condicoesDePagamento || '',
-        mercadoriaQueFaltaEntregar: cargaData.mercadoriaQueFaltaEntregar || '',
-        localizacao: cargaData.localizacao || '',
-        transportador: cargaData.transportador || '',
-        custos_de_transporte: cargaData.custos_de_transporte || '',
-        servicosARealizar: cargaData.servicosARealizar || []
-      });
-    }
-  }, [cargaData]);
-
-  // Mutation para salvar
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      const url = isEdit ? `/api/cargas/${id}` : '/api/cargas';
-      const method = isEdit ? 'PUT' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-
-      if (!res.ok) throw new Error('Failed to save carga');
-      return res.json();
-    },
-    onSuccess: () => {
-      alert(isEdit ? 'Carga atualizada com sucesso!' : 'Carga criada com sucesso!');
-      router.push('/cargas');
-    },
-    onError: () => {
-      alert('Erro ao salvar carga!');
-    }
-  });
-
-  // Mutation para apagar
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`/api/cargas/${id}`, {
-        method: 'DELETE'
-      });
-      if (!res.ok) throw new Error('Failed to delete carga');
-      return res.json();
-    },
-    onSuccess: () => {
-      alert('Carga apagada com sucesso!');
-      router.push('/cargas');
-    },
-    onError: () => {
-      alert('Erro ao apagar carga!');
-    }
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleDragOver = (e) => {
     e.preventDefault();
-    
-    if (!formData.cliente || !formData.dataPrevistaDeCarga) {
-      alert('Por favor preencha os campos obrigatórios (Cliente e Data)');
-      return;
-    }
-
-    saveMutation.mutate();
+    e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDelete = () => {
-    if (confirm('Tem a certeza que deseja apagar esta carga?')) {
-      deleteMutation.mutate();
+  const handleDrop = (e, day) => {
+    e.preventDefault();
+    if (draggedOrder) {
+      const dateKey = `${year}-${month + 1}-${day}`;
+      setCalendar(prev => ({
+        ...prev,
+        [dateKey]: [...(prev[dateKey] || []), draggedOrder]
+      }));
+      setOrders(prev => prev.filter(o => o.id !== draggedOrder.id));
+      setDraggedOrder(null);
     }
   };
 
-  const handleServicoToggle = (servicoId: number) => {
-    setFormData(prev => ({
+  const handleRemoveFromCalendar = (dateKey, order) => {
+    setCalendar(prev => ({
       ...prev,
-      servicosARealizar: prev.servicosARealizar.includes(servicoId)
-        ? prev.servicosARealizar.filter(id => id !== servicoId)
-        : [...prev.servicosARealizar, servicoId]
+      [dateKey]: prev[dateKey].filter(o => o.id !== order.id)
     }));
+    setOrders(prev => [...prev, order]);
+  };
+
+  const changeMonth = (direction) => {
+    setCurrentMonth(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(prev.getMonth() + direction);
+      return newDate;
+    });
+  };
+
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const renderCalendarDays = () => {
+    const days = [];
+    const totalCells = Math.ceil((daysInMonth + startingDayOfWeek) / 7) * 7;
+
+    for (let i = 0; i < totalCells; i++) {
+      const day = i - startingDayOfWeek + 1;
+      const isValidDay = day > 0 && day <= daysInMonth;
+      const dateKey = `${year}-${month + 1}-${day}`;
+      const ordersForDay = calendar[dateKey] || [];
+
+      days.push(
+        <div
+          key={i}
+          onDragOver={handleDragOver}
+          onDrop={isValidDay ? (e) => handleDrop(e, day) : null}
+          className={`min-h-24 border border-gray-700 p-2 ${
+            isValidDay 
+              ? 'bg-neutral-800 hover:bg-neutral-700 cursor-pointer' 
+              : 'bg-neutral-900'
+          }`}
+        >
+          {isValidDay && (
+            <>
+              <div className="text-xs text-gray-400 mb-1">{day}</div>
+              <div className="space-y-1">
+                {ordersForDay.map(order => (
+                  <div
+                    key={order.id}
+                    className={`${order.color} text-white text-xs p-1 rounded cursor-pointer hover:opacity-80`}
+                    onClick={() => handleRemoveFromCalendar(dateKey, order)}
+                    title="Click to remove"
+                  >
+                    {order.number}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      );
+    }
+
+    return days;
   };
 
   return (
-    <div className="min-h-screen bg-neutral-800 p-6">
-      <div className="max-w-4xl mx-auto">
-        
-        {/* Header */}
-        <div className="bg-neutral-800 border border-gray-100 shadow rounded-lg p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => router.push('/cargas')}
-                className="p-2 hover:bg-gray-100 rounded-full transition"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <h1 className="text-2xl font-bold text-gray-100">
-                {isEdit ? 'Editar Carga' : 'Nova Carga'}
-              </h1>
+    <div className="flex h-screen bg-neutral-900 text-white p-4 gap-4">
+      {/* Left Panel - Orders */}
+      <div className="w-72 bg-neutral-800 rounded-lg p-4 border border-gray-700">
+        <h2 className="text-xl font-bold mb-4 text-center">New Orders</h2>
+        <div className="space-y-2">
+          {orders.map(order => (
+            <div
+              key={order.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, order)}
+              className={`${order.color} p-3 rounded cursor-move hover:opacity-80 transition-opacity`}
+            >
+              <div className="font-semibold">{order.number}</div>
+              <div className="text-sm opacity-90">{order.client}</div>
             </div>
+          ))}
+          {orders.length === 0 && (
+            <div className="text-gray-500 text-center py-8">
+              All orders scheduled
+            </div>
+          )}
+        </div>
+      </div>
 
-            {isEdit && (
-              <div className="flex gap-2">
-                <button
-                  onClick={handleDelete}
-                  disabled={deleteMutation.isPending}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition disabled:opacity-50"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Apagar
-                </button>
-              </div>
-            )}
-          </div>
+      {/* Right Panel - Calendar */}
+      <div className="flex-1 bg-neutral-800 rounded-lg p-4 border border-gray-700 overflow-auto">
+        {/* Month Header */}
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => changeMonth(-1)}
+            className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 rounded"
+          >
+            ← Prev
+          </button>
+          <h2 className="text-2xl font-bold">
+            {monthNames[month]} {year}
+          </h2>
+          <button
+            onClick={() => changeMonth(1)}
+            className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 rounded"
+          >
+            Next →
+          </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-6">
-          
-          {/* Secção 1: Informação Básica */}
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">
-              Informação Básica
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              {/* Cliente */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Cliente <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.cliente}
-                  onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-
-              {/* País */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  País
-                </label>
-                <select
-                  value={formData.paisId}
-                  onChange={(e) => setFormData({ ...formData, paisId: parseInt(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {countries.map((country: any) => (
-                    <option key={country.id} value={country.id}>
-                      {country.country}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Encomenda Cliente */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Encomenda do Cliente
-                </label>
-                <input
-                  type="text"
-                  value={formData.encomendaDoCliente}
-                  onChange={(e) => setFormData({ ...formData, encomendaDoCliente: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Encomenda Primavera */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Encomenda Primavera
-                </label>
-                <input
-                  type="text"
-                  value={formData.encomendaPrimavera}
-                  onChange={(e) => setFormData({ ...formData, encomendaPrimavera: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Projeto */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Projeto
-                </label>
-                <input
-                  type="text"
-                  value={formData.projecto}
-                  onChange={(e) => setFormData({ ...formData, projecto: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Estado */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Estado
-                </label>
-                <select
-                  value={formData.estadoId}
-                  onChange={(e) => setFormData({ ...formData, estadoId: parseInt(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {estados.map((estado: any) => (
-                    <option key={estado.value} value={estado.value}>
-                      {estado.text}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
+        {/* Day Names */}
+        <div className="grid grid-cols-7 gap-1 mb-1">
+          {dayNames.map(day => (
+            <div key={day} className="text-center font-semibold text-gray-400 py-2">
+              {day}
             </div>
-          </div>
+          ))}
+        </div>
 
-          {/* Secção 2: Datas */}
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">
-              Datas e Prazos
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              
-              {/* Data Prevista */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Data Prevista de Carga <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={formData.dataPrevistaDeCarga}
-                  onChange={(e) => setFormData({ ...formData, dataPrevistaDeCarga: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
+        {/* Calendar Grid */}
+        <div className="grid grid-cols-7 gap-1">
+          {renderCalendarDays()}
+        </div>
 
-              {/* Hora Prevista */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Hora Prevista
-                </label>
-                <input
-                  type="time"
-                  value={formData.horaPrevistaDeCarga}
-                  onChange={(e) => setFormData({ ...formData, horaPrevistaDeCarga: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Prazo Entrega */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Prazo de Entrega Previsto
-                </label>
-                <input
-                  type="text"
-                  value={formData.prazoDeEntregaPrevisto}
-                  onChange={(e) => setFormData({ ...formData, prazoDeEntregaPrevisto: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Ex: 2 semanas"
-                />
-              </div>
-
-            </div>
-          </div>
-
-          {/* Secção 3: Detalhes */}
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">
-              Detalhes da Carga
-            </h2>
-            <div className="grid grid-cols-1 gap-4">
-              
-              {/* Localização */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Localização
-                </label>
-                <input
-                  type="text"
-                  value={formData.localizacao}
-                  onChange={(e) => setFormData({ ...formData, localizacao: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Contactos */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Contactos para Entrega
-                </label>
-                <textarea
-                  value={formData.contactosParaEntrega}
-                  onChange={(e) => setFormData({ ...formData, contactosParaEntrega: e.target.value })}
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Mercadoria */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Mercadoria
-                </label>
-                <textarea
-                  value={formData.mercadoria}
-                  onChange={(e) => setFormData({ ...formData, mercadoria: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Mercadoria que falta */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Mercadoria que Falta Entregar
-                </label>
-                <textarea
-                  value={formData.mercadoriaQueFaltaEntregar}
-                  onChange={(e) => setFormData({ ...formData, mercadoriaQueFaltaEntregar: e.target.value })}
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Condições Pagamento */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Condições de Pagamento
-                </label>
-                <input
-                  type="text"
-                  value={formData.condicoesDePagamento}
-                  onChange={(e) => setFormData({ ...formData, condicoesDePagamento: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-            </div>
-          </div>
-
-          {/* Secção 4: Transporte */}
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">
-              Transporte
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              {/* Transportador */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Transportador
-                </label>
-                <input
-                  type="text"
-                  value={formData.transportador}
-                  onChange={(e) => setFormData({ ...formData, transportador: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Custos */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Custos de Transporte (€)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.custos_de_transporte}
-                  onChange={(e) => setFormData({ ...formData, custos_de_transporte: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-            </div>
-          </div>
-
-          {/* Secção 5: Serviços */}
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">
-              Serviços a Realizar
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {servicos.map((servico: { value: number; text: string | null }) => (
-                <label
-                  key={servico.value}
-                  className="flex items-center gap-2 p-3 border border-gray-300 rounded hover:bg-gray-50 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={formData.servicosARealizar.includes(servico.value)}
-                    onChange={() => handleServicoToggle(servico.value)}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-700">{servico.text}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Botões */}
-          <div className="flex justify-end gap-4 pt-4 border-t">
-            <button
-              type="button"
-              onClick={() => router.push('/cargas')}
-              className="px-6 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saveMutation.isPending}
-              className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50"
-            >
-              <Save className="w-4 h-4" />
-              {saveMutation.isPending ? 'A guardar...' : (isEdit ? 'Atualizar' : 'Criar')}
-            </button>
-          </div>
-
-        </form>
-
+        <div className="mt-4 text-sm text-gray-400 text-center">
+          💡 Drag orders from left to calendar days. Click orders on calendar to remove them.
+        </div>
       </div>
     </div>
   );
-            }
+};
+
+export default DragDropCalendarBoard;
