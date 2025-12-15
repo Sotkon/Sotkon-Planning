@@ -1,26 +1,47 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 
-const DragDropCalendarBoard = () => {
+export default function DragDropCalendarBoard() {
   const language = 'pt';
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendar, setCalendar] = useState({});
   const [draggedOrder, setDraggedOrder] = useState(null);
+  const [selectedEstados, setSelectedEstados] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8]); // All selected by default
+
+  // Fetch estados for the filter
+  const { data: estados = [] } = useQuery({
+    queryKey: ['estados', language],
+    queryFn: async () => {
+      const res = await fetch(`/api/estados?language=${language}`);
+      if (!res.ok) throw new Error('Failed to fetch estados');
+      return res.json();
+    }
+  });
+
+  // Fetch countries for the filter
+  const { data: countries = [] } = useQuery({
+    queryKey: ['countries'],
+    queryFn: async () => {
+      const res = await fetch('/api/countries');
+      if (!res.ok) throw new Error('Failed to fetch countries');
+      return res.json();
+    }
+  });
 
   // Fetch unscheduled orders from your API
   const { data: ordersData, isLoading, refetch } = useQuery({
-    queryKey: ['unscheduled-orders', language],
+    queryKey: ['unscheduled-orders', language, selectedEstados],
     queryFn: async () => {
       const params = new URLSearchParams({
-        dataPrevistaDeCarga: new Date().getFullYear() + '-01-01',
+        dataInicio: new Date().getFullYear() + '-01-01',
         language: language,
-        estadoId: '0', // All states
+        estadoId: selectedEstados.join(','), // Multiple estados
         countryId: '0', // All countries
         pageIndex: '0',
-        pageSize: '100', // Get more orders for scheduling
+        pageSize: '200', // Get more orders for scheduling
         textToSearch: ''
       });
 
@@ -49,16 +70,32 @@ const DragDropCalendarBoard = () => {
   // Get color based on estado
   const getOrderColor = (estadoId) => {
     const colors = {
-      1: 'bg-yellow-400',    // NOVA
-      2: 'bg-blue-500',      // AGENDADA
-      3: 'bg-purple-500',    // PRODUZIDA
-      4: 'bg-orange-500',    // EM EXPEDIÇÃO
-      5: 'bg-green-500',     // REALIZADA
-      6: 'bg-red-500',       // CANCELADA
-      7: 'bg-pink-500',      // FATURADA
-      8: 'bg-amber-700'       // A DEFINIR
+      1: 'bg-yellow-400',
+      2: 'bg-blue-500',
+      3: 'bg-purple-500',
+      4: 'bg-orange-500',
+      5: 'bg-green-500',
+      6: 'bg-red-500',
+      7: 'bg-pink-500',
+      8: 'bg-amber-700'
     };
     return colors[estadoId] || 'bg-gray-500';
+  };
+
+  const handleEstadoToggle = (estadoId: number) => {
+    setSelectedEstados(prev =>
+      prev.includes(estadoId)
+        ? prev.filter(id => id !== estadoId)
+        : [...prev, estadoId]
+    );
+  };
+
+  const toggleAllEstados = () => {
+    if (selectedEstados.length === estados.length) {
+      setSelectedEstados([]);
+    } else {
+      setSelectedEstados(estados.map(e => e.id));
+    }
   };
 
   const handleDragStart = (e, order) => {
@@ -76,8 +113,7 @@ const DragDropCalendarBoard = () => {
     if (draggedOrder) {
       const dateKey = `${year}-${month + 1}-${day}`;
       const scheduledDate = new Date(year, month, day);
-      
-      // Add to calendar UI
+
       setCalendar(prev => ({
         ...prev,
         [dateKey]: [...(prev[dateKey] || []), draggedOrder]
@@ -86,11 +122,11 @@ const DragDropCalendarBoard = () => {
       // TODO: Update the order in your database with the scheduled date
       // await fetch(`/api/cargas/${draggedOrder.id}`, {
       //   method: 'PATCH',
-      //   body: JSON.stringify({ scheduledDate })
+      //   body: JSON.stringify({ dataPrevistaDeCarga: scheduledDate })
       // });
 
       setDraggedOrder(null);
-      refetch(); // Refresh orders list
+      refetch();
     }
   };
 
@@ -103,10 +139,10 @@ const DragDropCalendarBoard = () => {
     // TODO: Remove scheduled date from database
     // await fetch(`/api/cargas/${order.id}`, {
     //   method: 'PATCH',
-    //   body: JSON.stringify({ scheduledDate: null })
+    //   body: JSON.stringify({ dataPrevistaDeCarga: null })
     // });
 
-    refetch(); // Refresh orders list
+    refetch();
   };
 
   const changeMonth = (direction) => {
@@ -117,10 +153,10 @@ const DragDropCalendarBoard = () => {
     });
   };
 
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'];
+  const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
   const renderCalendarDays = () => {
     const days = [];
@@ -137,25 +173,26 @@ const DragDropCalendarBoard = () => {
           key={i}
           onDragOver={handleDragOver}
           onDrop={isValidDay ? (e) => handleDrop(e, day) : null}
-          className={`min-h-24 border border-gray-700 p-2 ${
-            isValidDay 
-              ? 'bg-neutral-800 hover:bg-neutral-700 cursor-pointer' 
+          className={`min-h-32 border border-gray-700 p-2 ${
+            isValidDay
+              ? 'bg-neutral-800 hover:bg-neutral-700 cursor-pointer'
               : 'bg-neutral-900'
           }`}
         >
           {isValidDay && (
             <>
-              <div className="text-xs text-gray-400 mb-1 font-semibold">{day}</div>
+              <div className="text-sm text-gray-300 mb-2 font-bold">{day}</div>
               <div className="space-y-1">
                 {ordersForDay.map(order => (
                   <div
                     key={order.id}
-                    className={`${getOrderColor(order.estadoId)} text-white text-xs p-1 rounded cursor-pointer hover:opacity-80`}
+                    className={`${getOrderColor(order.estadoId)} text-white text-xs p-2 rounded cursor-pointer hover:opacity-80 transition-opacity`}
                     onClick={() => handleRemoveFromCalendar(dateKey, order)}
-                    title={`${order.nDoc} - ${order.entidade} - Click to remove`}
+                    title="Clique para remover"
                   >
-                    <div className="font-semibold">{order.nDoc}</div>
-                    <div className="text-[10px] truncate">{order.entidade}</div>
+                    <div className="font-bold">{order.encomendaPrimavera}</div>
+                    <div className="text-[10px] truncate">{order.cliente}</div>
+                    <div className="text-[10px] opacity-75">{order.estadoDesc}</div>
                   </div>
                 ))}
               </div>
@@ -172,46 +209,104 @@ const DragDropCalendarBoard = () => {
     return (
       <div className="flex items-center justify-center h-screen bg-neutral-900">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-        <span className="ml-3 text-white">Loading orders...</span>
+        <span className="ml-3 text-white">A carregar encomendas...</span>
       </div>
     );
   }
 
   return (
     <div className="flex h-screen bg-neutral-900 text-white p-4 gap-4">
-      {/* Left Panel - Unscheduled Orders */}
-      <div className="w-80 bg-neutral-800 rounded-lg p-4 border border-gray-700 overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4 text-center sticky top-0 bg-neutral-800 pb-2">
-          Encomendas Não Agendadas
-        </h2>
-        <div className="text-xs text-gray-400 mb-3 text-center">
-          {orders.length} orders
-        </div>
-        <div className="space-y-2">
-          {orders.map(order => (
-            <div
-              key={order.id}
-              draggable
-              onDragStart={(e) => handleDragStart(e, order)}
-              className={`${getOrderColor(order.estadoId)} p-3 rounded cursor-move hover:opacity-80 transition-opacity`}
+      {/* Left Panel - Filters and Orders */}
+      <div className="w-96 bg-neutral-800 rounded-lg border border-gray-700 overflow-y-auto">
+        
+        {/* Estado Filter */}
+        <div className="sticky top-0 bg-neutral-800 p-4 border-b border-gray-700 z-10">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-300">Filtrar por Estado</h3>
+            <button
+              onClick={toggleAllEstados}
+              className="text-xs text-blue-400 hover:text-blue-300"
             >
-              <div className="font-semibold text-sm">{order.nDoc}</div>
-              <div className="text-xs opacity-90 truncate" title={order.entidade}>
-                {order.entidade}
+              {selectedEstados.length === estados.length ? 'Desmarcar Todos' : 'Marcar Todos'}
+            </button>
+          </div>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {estados.map(estado => (
+              <label key={estado.id} className="flex items-center gap-2 cursor-pointer hover:bg-neutral-700 p-1 rounded">
+                <input
+                  type="checkbox"
+                  checked={selectedEstados.includes(estado.id)}
+                  onChange={() => handleEstadoToggle(estado.id)}
+                  className="w-4 h-4"
+                />
+                <span className={`w-3 h-3 rounded ${getOrderColor(estado.id)}`}></span>
+                <span className="text-sm text-gray-300">{estado.descPT}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Orders List */}
+        <div className="p-4">
+          <h2 className="text-lg font-bold mb-3 text-center">
+            Encomendas Não Agendadas
+          </h2>
+          <div className="text-xs text-gray-400 mb-3 text-center">
+            {orders.length} encomenda(s)
+          </div>
+          <div className="space-y-2">
+            {orders.map(order => (
+              <div
+                key={order.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, order)}
+                className={`${getOrderColor(order.estadoId)} p-3 rounded cursor-move hover:opacity-80 transition-opacity shadow-lg`}
+              >
+                <div className="font-bold text-sm mb-1">{order.encomendaPrimavera}</div>
+                <div className="text-xs opacity-90 mb-1">
+                  <strong>Cliente:</strong> {order.cliente}
+                </div>
+                {order.encomendaDoCliente && (
+                  <div className="text-xs opacity-90 mb-1">
+                    <strong>Enc. Cliente:</strong> {order.encomendaDoCliente}
+                  </div>
+                )}
+                {order.projecto && (
+                  <div className="text-xs opacity-90 mb-1">
+                    <strong>Projecto:</strong> {order.projecto}
+                  </div>
+                )}
+                <div className="text-xs opacity-75 mb-1">
+                  <strong>Estado:</strong> {order.estadoDesc}
+                </div>
+                {order.dataPrevistaDeCarga && (
+                  <div className="text-xs opacity-75 mb-1">
+                    <strong>Data Prevista:</strong> {new Date(order.dataPrevistaDeCarga).toLocaleDateString('pt-PT')}
+                  </div>
+                )}
+                {order.localizacao && (
+                  <div className="text-xs opacity-75 mb-1">
+                    <strong>Localização:</strong> {order.localizacao}
+                  </div>
+                )}
+                {order.transportador && (
+                  <div className="text-xs opacity-75 mb-1">
+                    <strong>Transportador:</strong> {order.transportador}
+                  </div>
+                )}
+                {order.observacoes && (
+                  <div className="text-xs opacity-75 italic mt-2 pt-2 border-t border-white/20">
+                    <strong>Obs:</strong> {order.observacoes}
+                  </div>
+                )}
               </div>
-              <div className="text-xs opacity-75 mt-1">
-                {order.estadoDesc}
+            ))}
+            {orders.length === 0 && (
+              <div className="text-gray-500 text-center py-8">
+                Nenhuma encomenda encontrada com os filtros selecionados
               </div>
-              <div className="text-xs opacity-75">
-                Data: {new Date(order.dataDoc).toLocaleDateString('pt-PT')}
-              </div>
-            </div>
-          ))}
-          {orders.length === 0 && (
-            <div className="text-gray-500 text-center py-8">
-              Todas as encomendas agendadas
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -256,6 +351,4 @@ const DragDropCalendarBoard = () => {
       </div>
     </div>
   );
-};
-
-export default DragDropCalendarBoard;
+}
