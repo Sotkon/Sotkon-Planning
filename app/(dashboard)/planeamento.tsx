@@ -1,35 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
+import React, { useState } from 'react';
 
 const DragDropCalendarBoard = () => {
-  const language = 'pt';
+  const [orders, setOrders] = useState([
+    { id: 1, number: 'ORD-001', client: 'Client A', color: 'bg-blue-500' },
+    { id: 2, number: 'ORD-002', client: 'Client B', color: 'bg-green-500' },
+    { id: 3, number: 'ORD-003', client: 'Client C', color: 'bg-purple-500' },
+    { id: 4, number: 'ORD-004', client: 'Client D', color: 'bg-orange-500' },
+    { id: 5, number: 'ORD-005', client: 'Client E', color: 'bg-pink-500' }
+  ]);
+
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendar, setCalendar] = useState({});
   const [draggedOrder, setDraggedOrder] = useState(null);
-
-  // Fetch unscheduled orders from your API
-  const { data: ordersData, isLoading, refetch } = useQuery({
-    queryKey: ['unscheduled-orders', language],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        dataInicio: new Date().getFullYear() + '-01-01',
-        language: language,
-        estadoId: '0', // All states
-        countryId: '0', // All countries
-        pageIndex: '0',
-        pageSize: '100', // Get more orders for scheduling
-        textToSearch: ''
-      });
-
-      const res = await fetch(`/api/cargas?${params}`);
-      if (!res.ok) throw new Error('Failed to fetch orders');
-      return res.json();
-    },
-    staleTime: 30000
-  });
-
-  const orders = ordersData?.items || [];
 
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
@@ -44,21 +26,6 @@ const DragDropCalendarBoard = () => {
 
   const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentMonth);
 
-  // Get color based on estado
-  const getOrderColor = (estadoId) => {
-    const colors = {
-      1: 'bg-yellow-500',    // AGENDADA
-      2: 'bg-blue-500',      // EM PRODUÇÃO
-      3: 'bg-purple-500',    // PRODUZIDA
-      4: 'bg-orange-500',    // EM EXPEDIÇÃO
-      5: 'bg-green-500',     // REALIZADA
-      6: 'bg-red-500',       // CANCELADA
-      7: 'bg-pink-500',      // FATURADA
-      8: 'bg-cyan-500'       // PAGA
-    };
-    return colors[estadoId] || 'bg-gray-500';
-  };
-
   const handleDragStart = (e, order) => {
     setDraggedOrder(order);
     e.dataTransfer.effectAllowed = 'move';
@@ -69,42 +36,25 @@ const DragDropCalendarBoard = () => {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDrop = async (e, day) => {
+  const handleDrop = (e, day) => {
     e.preventDefault();
     if (draggedOrder) {
       const dateKey = `${year}-${month + 1}-${day}`;
-      const scheduledDate = new Date(year, month, day);
-      
-      // Add to calendar UI
       setCalendar(prev => ({
         ...prev,
         [dateKey]: [...(prev[dateKey] || []), draggedOrder]
       }));
-
-      // TODO: Update the order in your database with the scheduled date
-      // await fetch(`/api/cargas/${draggedOrder.id}`, {
-      //   method: 'PATCH',
-      //   body: JSON.stringify({ scheduledDate })
-      // });
-
+      setOrders(prev => prev.filter(o => o.id !== draggedOrder.id));
       setDraggedOrder(null);
-      refetch(); // Refresh orders list
     }
   };
 
-  const handleRemoveFromCalendar = async (dateKey, order) => {
+  const handleRemoveFromCalendar = (dateKey, order) => {
     setCalendar(prev => ({
       ...prev,
       [dateKey]: prev[dateKey].filter(o => o.id !== order.id)
     }));
-
-    // TODO: Remove scheduled date from database
-    // await fetch(`/api/cargas/${order.id}`, {
-    //   method: 'PATCH',
-    //   body: JSON.stringify({ scheduledDate: null })
-    // });
-
-    refetch(); // Refresh orders list
+    setOrders(prev => [...prev, order]);
   };
 
   const changeMonth = (direction) => {
@@ -143,17 +93,16 @@ const DragDropCalendarBoard = () => {
         >
           {isValidDay && (
             <>
-              <div className="text-xs text-gray-400 mb-1 font-semibold">{day}</div>
+              <div className="text-xs text-gray-400 mb-1">{day}</div>
               <div className="space-y-1">
                 {ordersForDay.map(order => (
                   <div
                     key={order.id}
-                    className={`${getOrderColor(order.estadoId)} text-white text-xs p-1 rounded cursor-pointer hover:opacity-80`}
+                    className={`${order.color} text-white text-xs p-1 rounded cursor-pointer hover:opacity-80`}
                     onClick={() => handleRemoveFromCalendar(dateKey, order)}
-                    title={`${order.nDoc} - ${order.entidade} - Click to remove`}
+                    title="Click to remove"
                   >
-                    <div className="font-semibold">{order.nDoc}</div>
-                    <div className="text-[10px] truncate">{order.entidade}</div>
+                    {order.number}
                   </div>
                 ))}
               </div>
@@ -166,48 +115,26 @@ const DragDropCalendarBoard = () => {
     return days;
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-neutral-900">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-        <span className="ml-3 text-white">Loading orders...</span>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-screen bg-neutral-900 text-white p-4 gap-4">
-      {/* Left Panel - Unscheduled Orders */}
-      <div className="w-80 bg-neutral-800 rounded-lg p-4 border border-gray-700 overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4 text-center sticky top-0 bg-neutral-800 pb-2">
-          Encomendas Não Agendadas
-        </h2>
-        <div className="text-xs text-gray-400 mb-3 text-center">
-          {orders.length} orders
-        </div>
+      {/* Left Panel - Orders */}
+      <div className="w-72 bg-neutral-800 rounded-lg p-4 border border-gray-700">
+        <h2 className="text-xl font-bold mb-4 text-center">New Orders</h2>
         <div className="space-y-2">
           {orders.map(order => (
             <div
               key={order.id}
               draggable
               onDragStart={(e) => handleDragStart(e, order)}
-              className={`${getOrderColor(order.estadoId)} p-3 rounded cursor-move hover:opacity-80 transition-opacity`}
+              className={`${order.color} p-3 rounded cursor-move hover:opacity-80 transition-opacity`}
             >
-              <div className="font-semibold text-sm">{order.nDoc}</div>
-              <div className="text-xs opacity-90 truncate" title={order.entidade}>
-                {order.entidade}
-              </div>
-              <div className="text-xs opacity-75 mt-1">
-                {order.estadoDesc}
-              </div>
-              <div className="text-xs opacity-75">
-                Data: {new Date(order.dataDoc).toLocaleDateString('pt-PT')}
-              </div>
+              <div className="font-semibold">{order.number}</div>
+              <div className="text-sm opacity-90">{order.client}</div>
             </div>
           ))}
           {orders.length === 0 && (
             <div className="text-gray-500 text-center py-8">
-              Todas as encomendas agendadas
+              All orders scheduled
             </div>
           )}
         </div>
@@ -216,28 +143,28 @@ const DragDropCalendarBoard = () => {
       {/* Right Panel - Calendar */}
       <div className="flex-1 bg-neutral-800 rounded-lg p-4 border border-gray-700 overflow-auto">
         {/* Month Header */}
-        <div className="flex items-center justify-between mb-4 sticky top-0 bg-neutral-800 pb-2 z-10">
+        <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => changeMonth(-1)}
-            className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 rounded transition-colors"
+            className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 rounded"
           >
-            ← Anterior
+            ← Prev
           </button>
           <h2 className="text-2xl font-bold">
             {monthNames[month]} {year}
           </h2>
           <button
             onClick={() => changeMonth(1)}
-            className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 rounded transition-colors"
+            className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 rounded"
           >
-            Próximo →
+            Next →
           </button>
         </div>
 
         {/* Day Names */}
         <div className="grid grid-cols-7 gap-1 mb-1">
           {dayNames.map(day => (
-            <div key={day} className="text-center font-semibold text-gray-400 py-2 text-sm">
+            <div key={day} className="text-center font-semibold text-gray-400 py-2">
               {day}
             </div>
           ))}
@@ -248,8 +175,8 @@ const DragDropCalendarBoard = () => {
           {renderCalendarDays()}
         </div>
 
-        <div className="mt-4 text-sm text-gray-400 text-center bg-neutral-800 py-2">
-          💡 Arraste encomendas da esquerda para os dias do calendário. Clique nas encomendas no calendário para removê-las.
+        <div className="mt-4 text-sm text-gray-400 text-center">
+          💡 Drag orders from left to calendar days. Click orders on calendar to remove them.
         </div>
       </div>
     </div>
