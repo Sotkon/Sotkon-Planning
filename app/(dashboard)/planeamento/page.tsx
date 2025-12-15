@@ -9,39 +9,18 @@ export default function DragDropCalendarBoard() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendar, setCalendar] = useState({});
   const [draggedOrder, setDraggedOrder] = useState(null);
-  const [selectedEstados, setSelectedEstados] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8]); // All selected by default
 
-  // Fetch estados for the filter
-  const { data: estados = [] } = useQuery({
-    queryKey: ['estados', language],
-    queryFn: async () => {
-      const res = await fetch(`/api/estados?language=${language}`);
-      if (!res.ok) throw new Error('Failed to fetch estados');
-      return res.json();
-    }
-  });
-
-  // Fetch countries for the filter
-  const { data: countries = [] } = useQuery({
-    queryKey: ['countries'],
-    queryFn: async () => {
-      const res = await fetch('/api/countries');
-      if (!res.ok) throw new Error('Failed to fetch countries');
-      return res.json();
-    }
-  });
-
-  // Fetch unscheduled orders from your API
-  const { data: ordersData, isLoading, refetch } = useQuery({
-    queryKey: ['unscheduled-orders', language, selectedEstados],
+  // Fetch ALL orders from your API (not just unscheduled)
+  const { data: ordersData, isLoading } = useQuery({
+    queryKey: ['all-orders', language],
     queryFn: async () => {
       const params = new URLSearchParams({
         dataInicio: new Date().getFullYear() + '-01-01',
         language: language,
-        estadoId: selectedEstados.join(','), // Multiple estados
+        estadoId: '1,2,3,4,5,6,7,8', // All estados
         countryId: '0', // All countries
         pageIndex: '0',
-        pageSize: '200', // Get more orders for scheduling
+        pageSize: '500', // Get more orders for scheduling
         textToSearch: ''
       });
 
@@ -52,7 +31,19 @@ export default function DragDropCalendarBoard() {
     staleTime: 30000
   });
 
-  const orders = ordersData?.items || [];
+  const allOrders = ordersData?.items || [];
+
+  // Filter out orders that are already scheduled in the calendar
+  const getScheduledOrderIds = () => {
+    const scheduledIds = new Set();
+    Object.values(calendar).forEach((dayOrders: any) => {
+      dayOrders.forEach(order => scheduledIds.add(order.id));
+    });
+    return scheduledIds;
+  };
+
+  const scheduledIds = getScheduledOrderIds();
+  const orders = allOrders.filter(order => !scheduledIds.has(order.id));
 
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
@@ -80,22 +71,6 @@ export default function DragDropCalendarBoard() {
       8: 'bg-amber-700'
     };
     return colors[estadoId] || 'bg-gray-500';
-  };
-
-  const handleEstadoToggle = (estadoId: number) => {
-    setSelectedEstados(prev =>
-      prev.includes(estadoId)
-        ? prev.filter(id => id !== estadoId)
-        : [...prev, estadoId]
-    );
-  };
-
-  const toggleAllEstados = () => {
-    if (selectedEstados.length === estados.length) {
-      setSelectedEstados([]);
-    } else {
-      setSelectedEstados(estados.map(e => e.id));
-    }
   };
 
   const handleDragStart = (e, order) => {
@@ -126,7 +101,8 @@ export default function DragDropCalendarBoard() {
       // });
 
       setDraggedOrder(null);
-      refetch();
+      // No need to refetch - the order will automatically disappear from the left pane
+      // because it's now in the calendar and filtered out
     }
   };
 
@@ -142,7 +118,7 @@ export default function DragDropCalendarBoard() {
     //   body: JSON.stringify({ dataPrevistaDeCarga: null })
     // });
 
-    refetch();
+    // No need to refetch - the order will automatically reappear in the left pane
   };
 
   const changeMonth = (direction) => {
@@ -216,36 +192,9 @@ export default function DragDropCalendarBoard() {
 
   return (
     <div className="flex h-screen bg-neutral-900 text-white p-4 gap-4">
-      {/* Left Panel - Filters and Orders */}
+      {/* Left Panel - Orders */}
       <div className="w-96 bg-neutral-800 rounded-lg border border-gray-700 overflow-y-auto">
         
-        {/* Estado Filter */}
-        <div className="sticky top-0 bg-neutral-800 p-4 border-b border-gray-700 z-10">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-gray-300">Filtrar por Estado</h3>
-            <button
-              onClick={toggleAllEstados}
-              className="text-xs text-blue-400 hover:text-blue-300"
-            >
-              {selectedEstados.length === estados.length ? 'Desmarcar Todos' : 'Marcar Todos'}
-            </button>
-          </div>
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {estados.map(estado => (
-              <label key={estado.id} className="flex items-center gap-2 cursor-pointer hover:bg-neutral-700 p-1 rounded">
-                <input
-                  type="checkbox"
-                  checked={selectedEstados.includes(estado.id)}
-                  onChange={() => handleEstadoToggle(estado.id)}
-                  className="w-4 h-4"
-                />
-                <span className={`w-3 h-3 rounded ${getOrderColor(estado.id)}`}></span>
-                <span className="text-sm text-gray-300">{estado.descPT}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
         {/* Orders List */}
         <div className="p-4">
           <h2 className="text-lg font-bold mb-3 text-center">
@@ -303,7 +252,7 @@ export default function DragDropCalendarBoard() {
             ))}
             {orders.length === 0 && (
               <div className="text-gray-500 text-center py-8">
-                Nenhuma encomenda encontrada com os filtros selecionados
+                Todas as encomendas foram agendadas
               </div>
             )}
           </div>
