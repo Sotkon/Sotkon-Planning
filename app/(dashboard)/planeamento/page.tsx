@@ -1,3 +1,12 @@
+'use client'
+
+import React, { useState } from 'react';
+// ... rest of your imports
+
+export default function YourComponent() {
+  const [state, setState] = useState(...)
+  // ... rest of your component
+}
 import React, { useState } from 'react';
 
 const DragDropCalendarBoard = () => {
