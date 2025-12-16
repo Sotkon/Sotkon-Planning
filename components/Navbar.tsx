@@ -133,7 +133,7 @@ export default function Navbar() {
                       Planeamento
                     </Link>
                     <Link
-                      href="/planeamento"
+                      href="/shopfloor"
                       className="block px-4 py-2 hover:bg-neutral-600 text-gray-100 transition"
                       onClick={closeDropdown}
                     >
