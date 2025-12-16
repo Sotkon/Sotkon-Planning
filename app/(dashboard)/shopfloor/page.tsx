@@ -14,8 +14,8 @@ const estadoColors = {
   6: '#6B7280', // gray-500
 };
 
-const GRID_COLS = 4;
-const GRID_ROWS = 10;
+const GRID_COLS = 10;
+const GRID_ROWS = 5;
 
 export default function FactoryLayoutPlanner() {
   const [availableOrders, setAvailableOrders] = useState([]);
@@ -305,10 +305,10 @@ export default function FactoryLayoutPlanner() {
         onDrop={(e) => handleCanvasDrop(e, monthKey)}
         onDragOver={(e) => handleCanvasDragOver(e, monthKey)}
         onDragLeave={handleCanvasDragLeave}
-        className="relative w-full aspect-[2/5] rounded-lg bg-gray-800 border-4 border-white"
+        className="relative w-full aspect-[2/1] rounded-lg bg-gray-800 border-4 border-white"
       >
         {/* Grid cells */}
-        <div className="absolute inset-0 grid grid-cols-4 grid-rows-10">
+        <div className="absolute inset-0 grid grid-cols-10 grid-rows-5">
           {Array.from({ length: GRID_ROWS }).map((_, row) =>
             Array.from({ length: GRID_COLS }).map((_, col) => {
               const isOccupied = isCellOccupied(monthKey, row, col);
@@ -489,8 +489,8 @@ export default function FactoryLayoutPlanner() {
         </div>
 
         <div className="flex-1 p-6 overflow-auto">
-          {/* Factory Layout Image */}
-          <div className="mb-6 rounded-lg overflow-hidden border-2 border-gray-600 bg-white">
+          {/* Factory Layout Image - Fixed at top */}
+          <div className="sticky top-0 z-20 mb-6 rounded-lg overflow-hidden border-2 border-gray-600 bg-white shadow-lg">
             <img 
               src="/Layout_fábrica_h.png" 
               alt="Layout Fábrica" 
