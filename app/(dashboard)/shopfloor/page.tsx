@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useRef, useEffect } from 'react';
 import { GripVertical, Trash2, Save, Upload, X } from 'lucide-react';
 
