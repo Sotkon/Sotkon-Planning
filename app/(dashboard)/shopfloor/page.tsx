@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { GripVertical, Trash2, Save, Upload, X, Copy, Plus, CheckCircle } from 'lucide-react';
+import { GripVertical, Trash2, X, Copy, Plus, CheckCircle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 
 // Estado colors mapping
 const estadoColors = {
@@ -13,24 +14,11 @@ const estadoColors = {
   6: '#6B7280', // gray-500
 };
 
-// Mock orders data (simulating what would come from ENC.tsx)
-const mockOrders = [
-  { id: 1, projeto: 'PRJ-001', encomenda: 'ENC-2024-001', estadoId: 1, estado: 'Pendente' },
-  { id: 2, projeto: 'PRJ-002', encomenda: 'ENC-2024-002', estadoId: 2, estado: 'Em Produção' },
-  { id: 3, projeto: 'PRJ-003', encomenda: 'ENC-2024-003', estadoId: 3, estado: 'Concluído' },
-  { id: 4, projeto: 'PRJ-004', encomenda: 'ENC-2024-004', estadoId: 1, estado: 'Pendente' },
-  { id: 5, projeto: 'PRJ-005', encomenda: 'ENC-2024-005', estadoId: 4, estado: 'Em Teste' },
-  { id: 6, projeto: 'PRJ-006', encomenda: 'ENC-2024-006', estadoId: 2, estado: 'Em Produção' },
-  { id: 7, projeto: 'PRJ-007', encomenda: 'ENC-2024-007', estadoId: 5, estado: 'Aguardando' },
-  { id: 8, projeto: 'PRJ-008', encomenda: 'ENC-2024-008', estadoId: 3, estado: 'Concluído' },
-];
-
 const GRID_COLS = 4;
 const GRID_ROWS = 10;
 
 export default function FactoryLayoutPlanner() {
-  const [orders] = useState(mockOrders);
-  const [availableOrders, setAvailableOrders] = useState(mockOrders);
+  const [availableOrders, setAvailableOrders] = useState([]);
   const [placedCards, setPlacedCards] = useState({ month1: [], month2: [], month3: [] });
   const [newOrderText, setNewOrderText] = useState('');
   const [draggedOrder, setDraggedOrder] = useState(null);
@@ -38,7 +26,6 @@ export default function FactoryLayoutPlanner() {
   const [draggedFromMonth, setDraggedFromMonth] = useState(null);
   const [hoveredCell, setHoveredCell] = useState(null);
   const [hoveredMonth, setHoveredMonth] = useState(null);
-  const [backgroundImage, setBackgroundImage] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [monthTitles, setMonthTitles] = useState({
     month1: 'Mês 1',
@@ -47,13 +34,36 @@ export default function FactoryLayoutPlanner() {
   });
   const [saveIndicator, setSaveIndicator] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [hoveredOrderId, setHoveredOrderId] = useState(null);
   
   const canvasRefs = {
     month1: useRef(null),
     month2: useRef(null),
     month3: useRef(null)
   };
-  const fileInputRef = useRef(null);
+
+  const language = 'pt';
+
+  // Fetch cargas from API
+  const { data: cargasData } = useQuery({
+    queryKey: ['cargas-all', language],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        dataInicio: new Date().getFullYear() + '-01-01',
+        language: language,
+        estadoId: '0',
+        countryId: '0',
+        pageIndex: '0',
+        pageSize: '1000',
+        textToSearch: ''
+      });
+
+      const res = await fetch(`/api/cargas?${params}`);
+      if (!res.ok) throw new Error('Failed to fetch cargas');
+      return res.json();
+    },
+    staleTime: 30000
+  });
 
   // Load layout on mount
   useEffect(() => {
@@ -61,10 +71,13 @@ export default function FactoryLayoutPlanner() {
     if (saved) {
       try {
         const layout = JSON.parse(saved);
-        setBackgroundImage(layout.backgroundImage || null);
         setPlacedCards(layout.placedCards || { month1: [], month2: [], month3: [] });
         setMonthTitles(layout.monthTitles || { month1: 'Mês 1', month2: 'Mês 2', month3: 'Mês 3' });
-        setAvailableOrders(layout.availableOrders || mockOrders);
+        
+        // If we have saved available orders, use them
+        if (layout.availableOrders && layout.availableOrders.length > 0) {
+          setAvailableOrders(layout.availableOrders);
+        }
       } catch (error) {
         console.error('Error loading saved layout:', error);
       }
@@ -72,12 +85,22 @@ export default function FactoryLayoutPlanner() {
     setIsInitialLoad(false);
   }, []);
 
+  // Update available orders when API data loads
+  useEffect(() => {
+    if (cargasData && cargasData.items && !isInitialLoad) {
+      // Only update if we don't have saved orders
+      const saved = localStorage.getItem('factoryLayout');
+      if (!saved || !JSON.parse(saved).availableOrders) {
+        setAvailableOrders(cargasData.items);
+      }
+    }
+  }, [cargasData, isInitialLoad]);
+
   // Auto-save whenever state changes (after initial load)
   useEffect(() => {
-    if (isInitialLoad) return; // Skip auto-save on initial load
+    if (isInitialLoad) return;
 
     const layout = {
-      backgroundImage,
       placedCards,
       monthTitles,
       availableOrders
@@ -85,18 +108,18 @@ export default function FactoryLayoutPlanner() {
     
     localStorage.setItem('factoryLayout', JSON.stringify(layout));
     
-    // Show save indicator
     setSaveIndicator(true);
     const timer = setTimeout(() => setSaveIndicator(false), 1000);
     
     return () => clearTimeout(timer);
-  }, [backgroundImage, placedCards, monthTitles, availableOrders, isInitialLoad]);
+  }, [placedCards, monthTitles, availableOrders, isInitialLoad]);
 
   // Filter orders based on search
   const filteredOrders = availableOrders.filter(order => 
-    order.projeto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.encomenda.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.estado.toLowerCase().includes(searchTerm.toLowerCase())
+    order.projeto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    order.encomenda?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    order.estado?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    order.mercadoria?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Get all placed cards across all months
@@ -131,7 +154,6 @@ export default function FactoryLayoutPlanner() {
       uniqueId: Date.now() + Math.random()
     };
     
-    // Find the index of the original order and insert right after it
     const orderIndex = availableOrders.findIndex(o => o.id === order.id);
     const newOrders = [...availableOrders];
     newOrders.splice(orderIndex + 1, 0, newOrder);
@@ -148,7 +170,10 @@ export default function FactoryLayoutPlanner() {
       projeto: newOrderText,
       encomenda: 'Custom',
       estadoId: 6,
-      estado: 'Personalizado'
+      estado: 'Personalizado',
+      mercadoria: '',
+      pais: '',
+      dataEntrega: ''
     };
     
     setAvailableOrders([newOrder, ...availableOrders]);
@@ -210,7 +235,6 @@ export default function FactoryLayoutPlanner() {
       return;
     }
 
-    // Check if cell is occupied
     if (isCellOccupied(month, cell.row, cell.col)) {
       setDraggedOrder(null);
       setDraggedCard(null);
@@ -221,7 +245,6 @@ export default function FactoryLayoutPlanner() {
     }
 
     if (draggedOrder) {
-      // Adding new card from available orders
       const newCard = {
         ...draggedOrder,
         uniqueId: Date.now() + Math.random(),
@@ -235,13 +258,10 @@ export default function FactoryLayoutPlanner() {
         [month]: [...prev[month], newCard]
       }));
 
-      // Remove from available orders
       setAvailableOrders(prev => prev.filter(o => o.id !== draggedOrder.id));
       
     } else if (draggedCard && draggedFromMonth) {
-      // Moving existing card
       if (draggedFromMonth === month) {
-        // Moving within same month
         setPlacedCards(prev => ({
           ...prev,
           [month]: prev[month].map(card => 
@@ -251,7 +271,6 @@ export default function FactoryLayoutPlanner() {
           )
         }));
       } else {
-        // Moving to different month
         setPlacedCards(prev => ({
           ...prev,
           [draggedFromMonth]: prev[draggedFromMonth].filter(card => card.uniqueId !== draggedCard.uniqueId),
@@ -280,10 +299,8 @@ export default function FactoryLayoutPlanner() {
   const removeCard = (uniqueId) => {
     const card = allPlacedCards.find(c => c.uniqueId === uniqueId);
     if (card) {
-      // Return to available orders
       setAvailableOrders(prev => [...prev, card]);
       
-      // Remove from placed cards
       setPlacedCards(prev => ({
         month1: prev.month1.filter(c => c.uniqueId !== uniqueId),
         month2: prev.month2.filter(c => c.uniqueId !== uniqueId),
@@ -292,32 +309,8 @@ export default function FactoryLayoutPlanner() {
     }
   };
 
-  // Handle background image upload
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setBackgroundImage(event.target.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Manual save (for user confirmation)
-  const saveLayout = () => {
-    const layout = {
-      backgroundImage,
-      placedCards,
-      monthTitles,
-      availableOrders
-    };
-    localStorage.setItem('factoryLayout', JSON.stringify(layout));
-    alert('Layout guardado com sucesso!');
-  };
-
-  const renderMonth = (monthKey, showImage = false) => (
-    <div className="flex-1 min-w-0">
+  const renderMonth = (monthKey) => (
+    <div className="mb-6">
       {/* Month Title */}
       <div className="mb-3">
         <input
@@ -328,13 +321,6 @@ export default function FactoryLayoutPlanner() {
           placeholder="Nome do mês"
         />
       </div>
-
-      {/* Background Image (only for month1) */}
-      {showImage && backgroundImage && (
-        <div className="mb-3 rounded-lg overflow-hidden border-2 border-gray-600">
-          <img src={backgroundImage} alt="Factory Layout" className="w-full h-auto" />
-        </div>
-      )}
 
       {/* Grid */}
       <div
@@ -411,6 +397,7 @@ export default function FactoryLayoutPlanner() {
                 <div className="font-bold truncate text-[11px]">{card.projeto}</div>
                 <div className="truncate text-[9px]">{card.encomenda}</div>
                 <div className="opacity-90 truncate text-[9px]">{card.estado}</div>
+                {card.mercadoria && <div className="truncate text-[9px] opacity-75">{card.mercadoria}</div>}
                 
                 <textarea
                   value={card.notes}
@@ -448,7 +435,7 @@ export default function FactoryLayoutPlanner() {
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Adicionar encomenda personalizada..."
+                placeholder="Adicionar texto livre..."
                 value={newOrderText}
                 onChange={(e) => setNewOrderText(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && addCustomOrder()}
@@ -476,7 +463,7 @@ export default function FactoryLayoutPlanner() {
 
         <div className="flex-1 overflow-y-auto p-4">
           {/* Available Orders */}
-          <div className="mb-6">
+          <div>
             <h3 className="text-sm font-semibold text-gray-400 mb-2 uppercase">
               Disponíveis ({filteredOrders.length})
             </h3>
@@ -484,8 +471,10 @@ export default function FactoryLayoutPlanner() {
               {filteredOrders.map(order => (
                 <div
                   key={order.id}
-                  className="rounded-lg"
+                  className="rounded-lg relative"
                   style={{ backgroundColor: estadoColors[order.estadoId] || '#6B7280' }}
+                  onMouseEnter={() => setHoveredOrderId(order.id)}
+                  onMouseLeave={() => setHoveredOrderId(null)}
                 >
                   <div
                     draggable
@@ -508,87 +497,22 @@ export default function FactoryLayoutPlanner() {
                       </button>
                     </div>
                   </div>
+                  
+                  {/* Tooltip for Mercadoria */}
+                  {hoveredOrderId === order.id && order.mercadoria && (
+                    <div className="absolute z-50 left-full ml-2 top-0 bg-gray-900 text-white px-3 py-2 rounded-lg shadow-xl border border-gray-600 min-w-[200px] max-w-[300px]">
+                      <div className="text-xs font-semibold mb-1">Mercadoria:</div>
+                      <div className="text-xs">{order.mercadoria}</div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           </div>
-
-          {/* Placed Cards across all months */}
-          {allPlacedCards.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold text-gray-400 mb-2 uppercase">
-                No Layout ({allPlacedCards.length})
-              </h3>
-              <div className="space-y-2">
-                {allPlacedCards.map(card => {
-                  // Find which month this card is in
-                  const month = placedCards.month1.find(c => c.uniqueId === card.uniqueId) ? 'Mês 1' :
-                                placedCards.month2.find(c => c.uniqueId === card.uniqueId) ? 'Mês 2' : 'Mês 3';
-                  
-                  return (
-                    <div
-                      key={card.uniqueId}
-                      className="p-3 rounded-lg"
-                      style={{ backgroundColor: estadoColors[card.estadoId] || '#6B7280' }}
-                    >
-                      <div className="flex items-start gap-2 mb-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-sm truncate">{card.projeto}</div>
-                          <div className="text-xs truncate">{card.encomenda}</div>
-                          <div className="text-xs opacity-90">{card.estado}</div>
-                          <div className="text-xs mt-1 opacity-75">
-                            {month} • Célula: {card.row},{card.col}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => removeCard(card.uniqueId)}
-                          className="p-1 hover:bg-black/20 rounded transition-colors"
-                          title="Remover"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <textarea
-                        value={card.notes}
-                        onChange={(e) => updateCardNotes(card.uniqueId, e.target.value)}
-                        placeholder="Notas..."
-                        className="w-full px-2 py-1 text-xs bg-black/20 border border-white/20 rounded resize-none focus:outline-none focus:ring-1 focus:ring-white/40"
-                        rows="3"
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="p-4 border-t border-gray-700 space-y-2">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-          >
-            <Upload className="w-4 h-4" />
-            <span>Carregar Imagem</span>
-          </button>
-          <button
-            onClick={saveLayout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
-          >
-            <Save className="w-4 h-4" />
-            <span>Guardar Layout</span>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageUpload}
-            className="hidden"
-          />
         </div>
       </div>
 
-      {/* Main Calendar Area - 3 Months */}
+      {/* Main Calendar Area - 3 Months Vertical */}
       <div className="flex-1 flex flex-col">
         <div className="p-4 bg-gray-800 border-b border-gray-700">
           <div className="flex items-center justify-between">
@@ -598,7 +522,6 @@ export default function FactoryLayoutPlanner() {
                 Arraste as encomendas para os meses • Total: {allPlacedCards.length} encomendas no layout
               </p>
             </div>
-            {/* Auto-save indicator */}
             {saveIndicator && (
               <div className="flex items-center gap-2 text-green-400 animate-pulse">
                 <CheckCircle className="w-5 h-5" />
@@ -609,8 +532,21 @@ export default function FactoryLayoutPlanner() {
         </div>
 
         <div className="flex-1 p-6 overflow-auto">
-          <div className="grid grid-cols-3 gap-6">
-            {renderMonth('month1', true)}
+          {/* Factory Layout Image */}
+          <div className="mb-6 rounded-lg overflow-hidden border-2 border-gray-600 bg-white">
+            <img 
+              src="/Layout_fábrica_h.png" 
+              alt="Layout Fábrica" 
+              className="w-full h-auto"
+              onError={(e) => {
+                e.target.style.display = 'none';
+              }}
+            />
+          </div>
+
+          {/* Months - Vertical Layout */}
+          <div className="space-y-6">
+            {renderMonth('month1')}
             {renderMonth('month2')}
             {renderMonth('month3')}
           </div>
