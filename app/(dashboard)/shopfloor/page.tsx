@@ -15,7 +15,7 @@ const estadoColors = {
 };
 
 const GRID_COLS = 10;
-const GRID_ROWS = 5;
+const GRID_ROWS = 4;
 
 export default function FactoryLayoutPlanner() {
   const [availableOrders, setAvailableOrders] = useState([]);
@@ -308,7 +308,7 @@ export default function FactoryLayoutPlanner() {
         className="relative w-full aspect-[2/1] rounded-lg bg-gray-800 border-4 border-white"
       >
         {/* Grid cells */}
-        <div className="absolute inset-0 grid grid-cols-10 grid-rows-5">
+        <div className="absolute inset-0 grid grid-cols-10 grid-rows-4">
           {Array.from({ length: GRID_ROWS }).map((_, row) =>
             Array.from({ length: GRID_COLS }).map((_, col) => {
               const isOccupied = isCellOccupied(monthKey, row, col);
@@ -347,7 +347,9 @@ export default function FactoryLayoutPlanner() {
               key={card.uniqueId}
               draggable
               onDragStart={(e) => handleCardDragStart(e, card, monthKey)}
-              className="absolute rounded shadow-xl cursor-move p-1.5 overflow-hidden"
+              onMouseEnter={() => setHoveredOrderId(card.uniqueId)}
+              onMouseLeave={() => setHoveredOrderId(null)}
+              className="absolute rounded shadow-xl cursor-move p-1.5 overflow-hidden group"
               style={{
                 left: `${card.col * cellWidth + 2}px`,
                 top: `${card.row * cellHeight + 2}px`,
@@ -374,7 +376,7 @@ export default function FactoryLayoutPlanner() {
                 <div className="font-bold truncate text-[11px]">{card.projeto}</div>
                 <div className="truncate text-[9px]">{card.encomenda}</div>
                 <div className="opacity-90 truncate text-[9px]">{card.estado}</div>
-                {card.mercadoria && <div className="truncate text-[9px] opacity-75">{card.mercadoria}</div>}
+                {card.pais && <div className="truncate text-[9px] opacity-75">{card.pais}</div>}
                 
                 <textarea
                   value={card.notes}
@@ -389,6 +391,14 @@ export default function FactoryLayoutPlanner() {
                   rows="3"
                 />
               </div>
+              
+              {/* Tooltip for Mercadoria on placed cards */}
+              {hoveredOrderId === card.uniqueId && card.mercadoria && (
+                <div className="absolute z-50 left-full ml-2 top-0 bg-gray-900 text-white px-3 py-2 rounded-lg shadow-xl border border-gray-600 min-w-[200px] max-w-[300px] pointer-events-none">
+                  <div className="text-xs font-semibold mb-1">Mercadoria:</div>
+                  <div className="text-xs">{card.mercadoria}</div>
+                </div>
+              )}
             </div>
           );
         })}
