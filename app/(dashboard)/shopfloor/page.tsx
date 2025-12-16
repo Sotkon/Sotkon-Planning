@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { GripVertical, Trash2, X, Copy, Plus, CheckCircle } from 'lucide-react';
+import { GripVertical, Trash2, X, Copy, CheckCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 // Estado colors mapping
@@ -20,7 +20,6 @@ const GRID_ROWS = 10;
 export default function FactoryLayoutPlanner() {
   const [availableOrders, setAvailableOrders] = useState([]);
   const [placedCards, setPlacedCards] = useState({ month1: [], month2: [], month3: [] });
-  const [newOrderText, setNewOrderText] = useState('');
   const [draggedOrder, setDraggedOrder] = useState(null);
   const [draggedCard, setDraggedCard] = useState(null);
   const [draggedFromMonth, setDraggedFromMonth] = useState(null);
@@ -74,7 +73,6 @@ export default function FactoryLayoutPlanner() {
         setPlacedCards(layout.placedCards || { month1: [], month2: [], month3: [] });
         setMonthTitles(layout.monthTitles || { month1: 'Mês 1', month2: 'Mês 2', month3: 'Mês 3' });
         
-        // If we have saved available orders, use them
         if (layout.availableOrders && layout.availableOrders.length > 0) {
           setAvailableOrders(layout.availableOrders);
         }
@@ -88,7 +86,6 @@ export default function FactoryLayoutPlanner() {
   // Update available orders when API data loads
   useEffect(() => {
     if (cargasData && cargasData.items && !isInitialLoad) {
-      // Only update if we don't have saved orders
       const saved = localStorage.getItem('factoryLayout');
       if (!saved || !JSON.parse(saved).availableOrders) {
         setAvailableOrders(cargasData.items);
@@ -158,26 +155,6 @@ export default function FactoryLayoutPlanner() {
     const newOrders = [...availableOrders];
     newOrders.splice(orderIndex + 1, 0, newOrder);
     setAvailableOrders(newOrders);
-  };
-
-  // Add new custom order from text field
-  const addCustomOrder = () => {
-    if (!newOrderText.trim()) return;
-    
-    const newOrder = {
-      id: Date.now() + Math.random(),
-      uniqueId: Date.now() + Math.random(),
-      projeto: newOrderText,
-      encomenda: 'Custom',
-      estadoId: 6,
-      estado: 'Personalizado',
-      mercadoria: '',
-      pais: '',
-      dataEntrega: ''
-    };
-    
-    setAvailableOrders([newOrder, ...availableOrders]);
-    setNewOrderText('');
   };
 
   // Handle dragging order from sidebar
@@ -409,6 +386,7 @@ export default function FactoryLayoutPlanner() {
                   onDragStart={(e) => e.preventDefault()}
                   placeholder="Notas..."
                   className="flex-1 w-full mt-0.5 px-1 py-0.5 bg-black/30 border border-white/30 rounded resize-none focus:outline-none focus:ring-1 focus:ring-white/50 text-[9px]"
+                  rows="3"
                 />
               </div>
             </div>
@@ -429,27 +407,6 @@ export default function FactoryLayoutPlanner() {
       <div className="w-80 bg-gray-800 border-r border-gray-700 flex flex-col">
         <div className="p-4 border-b border-gray-700">
           <h2 className="text-xl font-bold mb-4">Encomendas</h2>
-          
-          {/* Add custom order field */}
-          <div className="mb-3">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Adicionar texto livre..."
-                value={newOrderText}
-                onChange={(e) => setNewOrderText(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addCustomOrder()}
-                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                onClick={addCustomOrder}
-                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-                title="Adicionar"
-              >
-                <Plus className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
           
           {/* Search field */}
           <input
