@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { GripVertical, Trash2, Save, Upload, X, Copy, Plus } from 'lucide-react';
+import { GripVertical, Trash2, Save, Upload, X, Copy, Plus, CheckCircle } from 'lucide-react';
 
 // Estado colors mapping
 const estadoColors = {
@@ -45,6 +45,8 @@ export default function FactoryLayoutPlanner() {
     month2: 'Mês 2',
     month3: 'Mês 3'
   });
+  const [saveIndicator, setSaveIndicator] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   
   const canvasRefs = {
     month1: useRef(null),
@@ -52,6 +54,43 @@ export default function FactoryLayoutPlanner() {
     month3: useRef(null)
   };
   const fileInputRef = useRef(null);
+
+  // Load layout on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('factoryLayout');
+    if (saved) {
+      try {
+        const layout = JSON.parse(saved);
+        setBackgroundImage(layout.backgroundImage || null);
+        setPlacedCards(layout.placedCards || { month1: [], month2: [], month3: [] });
+        setMonthTitles(layout.monthTitles || { month1: 'Mês 1', month2: 'Mês 2', month3: 'Mês 3' });
+        setAvailableOrders(layout.availableOrders || mockOrders);
+      } catch (error) {
+        console.error('Error loading saved layout:', error);
+      }
+    }
+    setIsInitialLoad(false);
+  }, []);
+
+  // Auto-save whenever state changes (after initial load)
+  useEffect(() => {
+    if (isInitialLoad) return; // Skip auto-save on initial load
+
+    const layout = {
+      backgroundImage,
+      placedCards,
+      monthTitles,
+      availableOrders
+    };
+    
+    localStorage.setItem('factoryLayout', JSON.stringify(layout));
+    
+    // Show save indicator
+    setSaveIndicator(true);
+    const timer = setTimeout(() => setSaveIndicator(false), 1000);
+    
+    return () => clearTimeout(timer);
+  }, [backgroundImage, placedCards, monthTitles, availableOrders, isInitialLoad]);
 
   // Filter orders based on search
   const filteredOrders = availableOrders.filter(order => 
@@ -265,7 +304,7 @@ export default function FactoryLayoutPlanner() {
     }
   };
 
-  // Save layout
+  // Manual save (for user confirmation)
   const saveLayout = () => {
     const layout = {
       backgroundImage,
@@ -276,18 +315,6 @@ export default function FactoryLayoutPlanner() {
     localStorage.setItem('factoryLayout', JSON.stringify(layout));
     alert('Layout guardado com sucesso!');
   };
-
-  // Load layout
-  useEffect(() => {
-    const saved = localStorage.getItem('factoryLayout');
-    if (saved) {
-      const layout = JSON.parse(saved);
-      setBackgroundImage(layout.backgroundImage);
-      setPlacedCards(layout.placedCards || { month1: [], month2: [], month3: [] });
-      setMonthTitles(layout.monthTitles || { month1: 'Mês 1', month2: 'Mês 2', month3: 'Mês 3' });
-      setAvailableOrders(layout.availableOrders || mockOrders);
-    }
-  }, []);
 
   const renderMonth = (monthKey, showImage = false) => (
     <div className="flex-1 min-w-0">
@@ -564,10 +591,21 @@ export default function FactoryLayoutPlanner() {
       {/* Main Calendar Area - 3 Months */}
       <div className="flex-1 flex flex-col">
         <div className="p-4 bg-gray-800 border-b border-gray-700">
-          <h1 className="text-2xl font-bold">Planeamento de Produção</h1>
-          <p className="text-sm text-gray-400 mt-1">
-            Arraste as encomendas para os meses • Total: {allPlacedCards.length} encomendas no layout
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">Planeamento de Produção</h1>
+              <p className="text-sm text-gray-400 mt-1">
+                Arraste as encomendas para os meses • Total: {allPlacedCards.length} encomendas no layout
+              </p>
+            </div>
+            {/* Auto-save indicator */}
+            {saveIndicator && (
+              <div className="flex items-center gap-2 text-green-400 animate-pulse">
+                <CheckCircle className="w-5 h-5" />
+                <span className="text-sm font-medium">Guardado automaticamente</span>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 p-6 overflow-auto">
