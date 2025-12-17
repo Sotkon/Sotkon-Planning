@@ -72,10 +72,6 @@ export default function FactoryLayoutPlanner() {
         const layout = JSON.parse(saved);
         setPlacedCards(layout.placedCards || { month1: [], month2: [], month3: [] });
         setMonthTitles(layout.monthTitles || { month1: 'Mês 1', month2: 'Mês 2', month3: 'Mês 3' });
-        
-        if (layout.availableOrders && layout.availableOrders.length > 0) {
-          setAvailableOrders(layout.availableOrders);
-        }
       } catch (error) {
         console.error('Error loading saved layout:', error);
       }
@@ -85,22 +81,22 @@ export default function FactoryLayoutPlanner() {
 
   // Update available orders when API data loads
   useEffect(() => {
-    if (cargasData && cargasData.items && !isInitialLoad) {
-      const saved = localStorage.getItem('factoryLayout');
-      if (!saved || !JSON.parse(saved).availableOrders) {
-        setAvailableOrders(cargasData.items);
-      }
+    if (cargasData && cargasData.items) {
+      // Initialize with API data - allow duplicates for preview purposes
+      setAvailableOrders(cargasData.items.map(item => ({
+        ...item,
+        uniqueId: `api-${item.id}-${Date.now()}`
+      })));
     }
-  }, [cargasData, isInitialLoad]);
+  }, [cargasData]);
 
-  // Auto-save whenever state changes (after initial load)
+  // Auto-save layout whenever it changes (after initial load)
   useEffect(() => {
     if (isInitialLoad) return;
 
     const layout = {
       placedCards,
-      monthTitles,
-      availableOrders
+      monthTitles
     };
     
     localStorage.setItem('factoryLayout', JSON.stringify(layout));
@@ -109,7 +105,7 @@ export default function FactoryLayoutPlanner() {
     const timer = setTimeout(() => setSaveIndicator(false), 1000);
     
     return () => clearTimeout(timer);
-  }, [placedCards, monthTitles, availableOrders, isInitialLoad]);
+  }, [placedCards, monthTitles, isInitialLoad]);
 
   // Filter orders based on search
   const filteredOrders = availableOrders.filter(order => 
@@ -143,18 +139,22 @@ export default function FactoryLayoutPlanner() {
     return null;
   };
 
-  // Duplicate order in available panel
+  // Duplicate order in available panel (for preview purposes)
   const duplicateOrder = (order) => {
     const newOrder = {
       ...order,
-      id: Date.now() + Math.random(),
-      uniqueId: Date.now() + Math.random()
+      uniqueId: `dup-${Date.now()}-${Math.random()}`
     };
     
-    const orderIndex = availableOrders.findIndex(o => o.id === order.id);
+    const orderIndex = availableOrders.findIndex(o => o.uniqueId === order.uniqueId);
     const newOrders = [...availableOrders];
     newOrders.splice(orderIndex + 1, 0, newOrder);
     setAvailableOrders(newOrders);
+  };
+
+  // Remove order from available panel
+  const removeOrderFromAvailable = (uniqueId) => {
+    setAvailableOrders(prev => prev.filter(o => o.uniqueId !== uniqueId));
   };
 
   // Handle dragging order from sidebar
@@ -224,7 +224,7 @@ export default function FactoryLayoutPlanner() {
     if (draggedOrder) {
       const newCard = {
         ...draggedOrder,
-        uniqueId: Date.now() + Math.random(),
+        uniqueId: `placed-${Date.now()}-${Math.random()}`,
         row: cell.row,
         col: cell.col,
         notes: ''
@@ -235,7 +235,8 @@ export default function FactoryLayoutPlanner() {
         [month]: [...prev[month], newCard]
       }));
 
-      setAvailableOrders(prev => prev.filter(o => o.id !== draggedOrder.id));
+      // Remove from available orders (it was dragged to canvas)
+      removeOrderFromAvailable(draggedOrder.uniqueId);
       
     } else if (draggedCard && draggedFromMonth) {
       if (draggedFromMonth === month) {
@@ -272,12 +273,18 @@ export default function FactoryLayoutPlanner() {
     }));
   };
 
-  // Remove card and return to available
+  // Remove card from canvas and return to available
   const removeCard = (uniqueId) => {
     const card = allPlacedCards.find(c => c.uniqueId === uniqueId);
     if (card) {
-      setAvailableOrders(prev => [...prev, card]);
+      // Return to available orders with new uniqueId
+      const returnedOrder = {
+        ...card,
+        uniqueId: `returned-${Date.now()}-${Math.random()}`
+      };
+      setAvailableOrders(prev => [...prev, returnedOrder]);
       
+      // Remove from canvas
       setPlacedCards(prev => ({
         month1: prev.month1.filter(c => c.uniqueId !== uniqueId),
         month2: prev.month2.filter(c => c.uniqueId !== uniqueId),
@@ -350,7 +357,7 @@ export default function FactoryLayoutPlanner() {
               onDragStart={(e) => handleCardDragStart(e, card, monthKey)}
               onMouseEnter={() => setHoveredCardId(card.uniqueId)}
               onMouseLeave={() => setHoveredCardId(null)}
-              className="absolute rounded shadow-xl cursor-move p-1.5"
+              className="absolute rounded shadow-xl cursor-move p-1.5 transition-transform"
               style={{
                 left: `${card.col * cellWidth + 2}px`,
                 top: `${card.row * cellHeight + 2}px`,
@@ -358,9 +365,9 @@ export default function FactoryLayoutPlanner() {
                 height: `${cellHeight - 4}px`,
                 backgroundColor: estadoColors[card.estadoId] || '#6B7280',
                 zIndex: isHovered ? 100 : 10,
-                overflow: 'visible'
+                overflow: 'visible',
+                transform: isHovered ? 'scale(1.02)' : 'scale(1)'
               }}
-              title={card.mercadoria || ''}
             >
               <div className="h-full flex flex-col text-[10px] leading-tight">
                 <div className="flex items-start justify-between gap-0.5 mb-0.5">
@@ -395,6 +402,14 @@ export default function FactoryLayoutPlanner() {
                   rows="3"
                 />
               </div>
+              
+              {/* Tooltip for Mercadoria on Canvas Cards */}
+              {isHovered && card.mercadoria && (
+                <div className="absolute z-[150] left-full ml-2 top-0 bg-gray-900 text-white px-3 py-2 rounded-lg shadow-xl border border-gray-600 min-w-[200px] max-w-[300px] pointer-events-none">
+                  <div className="text-xs font-semibold mb-1">Mercadoria:</div>
+                  <div className="text-xs whitespace-normal">{card.mercadoria}</div>
+                </div>
+              )}
             </div>
           );
         })}
@@ -433,10 +448,10 @@ export default function FactoryLayoutPlanner() {
             <div className="space-y-2">
               {filteredOrders.map(order => (
                 <div
-                  key={order.id}
+                  key={order.uniqueId}
                   className="rounded-lg relative"
                   style={{ backgroundColor: estadoColors[order.estadoId] || '#6B7280' }}
-                  onMouseEnter={() => setHoveredCardId(order.id)}
+                  onMouseEnter={() => setHoveredCardId(order.uniqueId)}
                   onMouseLeave={() => setHoveredCardId(null)}
                 >
                   <div
@@ -451,21 +466,30 @@ export default function FactoryLayoutPlanner() {
                         <div className="text-xs truncate">{order.encomenda}</div>
                         <div className="text-xs mt-1 opacity-90">{order.estado}</div>
                       </div>
-                      <button
-                        onClick={() => duplicateOrder(order)}
-                        className="p-1 hover:bg-black/20 rounded transition-colors"
-                        title="Duplicar"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </button>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => duplicateOrder(order)}
+                          className="p-1 hover:bg-black/20 rounded transition-colors"
+                          title="Duplicar"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => removeOrderFromAvailable(order.uniqueId)}
+                          className="p-1 hover:bg-black/20 rounded transition-colors"
+                          title="Remover"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                   
                   {/* Tooltip for Mercadoria */}
-                  {hoveredCardId === order.id && order.mercadoria && (
-                    <div className="absolute z-50 left-full ml-2 top-0 bg-gray-900 text-white px-3 py-2 rounded-lg shadow-xl border border-gray-600 min-w-[200px] max-w-[300px]">
+                  {hoveredCardId === order.uniqueId && order.mercadoria && (
+                    <div className="absolute z-50 left-full ml-2 top-0 bg-gray-900 text-white px-3 py-2 rounded-lg shadow-xl border border-gray-600 min-w-[200px] max-w-[300px] pointer-events-none">
                       <div className="text-xs font-semibold mb-1">Mercadoria:</div>
-                      <div className="text-xs">{order.mercadoria}</div>
+                      <div className="text-xs whitespace-normal">{order.mercadoria}</div>
                     </div>
                   )}
                 </div>
