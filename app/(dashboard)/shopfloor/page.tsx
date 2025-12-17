@@ -343,63 +343,72 @@ export default function FactoryLayoutPlanner() {
           const cellHeight = rect.height / GRID_ROWS;
           
           return (
-            <div
-              key={card.uniqueId}
-              draggable
-              onDragStart={(e) => handleCardDragStart(e, card, monthKey)}
-              onMouseEnter={() => setHoveredOrderId(card.uniqueId)}
-              onMouseLeave={() => setHoveredOrderId(null)}
-              className="absolute rounded shadow-xl cursor-move p-1.5 overflow-hidden group"
-              style={{
-                left: `${card.col * cellWidth + 2}px`,
-                top: `${card.row * cellHeight + 2}px`,
-                width: `${cellWidth - 4}px`,
-                height: `${cellHeight - 4}px`,
-                backgroundColor: estadoColors[card.estadoId] || '#6B7280',
-                zIndex: 10
-              }}
-            >
-              <div className="h-full flex flex-col text-[10px] leading-tight">
-                <div className="flex items-start justify-between gap-0.5 mb-0.5">
-                  <GripVertical className="w-2.5 h-2.5 flex-shrink-0" />
-                  <button
-                    onClick={(e) => {
+            <React.Fragment key={card.uniqueId}>
+              <div
+                draggable
+                onDragStart={(e) => handleCardDragStart(e, card, monthKey)}
+                onMouseEnter={() => setHoveredOrderId(card.uniqueId)}
+                onMouseLeave={() => setHoveredOrderId(null)}
+                className="absolute rounded shadow-xl cursor-move p-1.5 overflow-visible"
+                style={{
+                  left: `${card.col * cellWidth + 2}px`,
+                  top: `${card.row * cellHeight + 2}px`,
+                  width: `${cellWidth - 4}px`,
+                  height: `${cellHeight - 4}px`,
+                  backgroundColor: estadoColors[card.estadoId] || '#6B7280',
+                  zIndex: hoveredOrderId === card.uniqueId ? 100 : 10
+                }}
+              >
+                <div className="h-full flex flex-col text-[10px] leading-tight">
+                  <div className="flex items-start justify-between gap-0.5 mb-0.5">
+                    <GripVertical className="w-2.5 h-2.5 flex-shrink-0" />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeCard(card.uniqueId);
+                      }}
+                      className="p-0.5 hover:bg-black/30 rounded transition-colors"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
+                  
+                  <div className="font-bold truncate text-[11px]">{card.projeto}</div>
+                  <div className="truncate text-[9px]">{card.encomenda}</div>
+                  <div className="opacity-90 truncate text-[9px]">{card.estado}</div>
+                  {card.pais && <div className="truncate text-[9px] opacity-75">{card.pais}</div>}
+                  
+                  <textarea
+                    value={card.notes}
+                    onChange={(e) => {
                       e.stopPropagation();
-                      removeCard(card.uniqueId);
+                      updateCardNotes(card.uniqueId, e.target.value);
                     }}
-                    className="p-0.5 hover:bg-black/30 rounded transition-colors"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onMouseEnter={() => setHoveredOrderId(null)}
+                    onDragStart={(e) => e.preventDefault()}
+                    placeholder="Notas..."
+                    className="flex-1 w-full mt-0.5 px-1 py-0.5 bg-black/30 border border-white/30 rounded resize-none focus:outline-none focus:ring-1 focus:ring-white/50 text-[9px]"
+                    rows="3"
+                  />
                 </div>
-                
-                <div className="font-bold truncate text-[11px]">{card.projeto}</div>
-                <div className="truncate text-[9px]">{card.encomenda}</div>
-                <div className="opacity-90 truncate text-[9px]">{card.estado}</div>
-                {card.pais && <div className="truncate text-[9px] opacity-75">{card.pais}</div>}
-                
-                <textarea
-                  value={card.notes}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    updateCardNotes(card.uniqueId, e.target.value);
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onDragStart={(e) => e.preventDefault()}
-                  placeholder="Notas..."
-                  className="flex-1 w-full mt-0.5 px-1 py-0.5 bg-black/30 border border-white/30 rounded resize-none focus:outline-none focus:ring-1 focus:ring-white/50 text-[9px]"
-                  rows="3"
-                />
               </div>
               
               {/* Tooltip for Mercadoria on placed cards */}
               {hoveredOrderId === card.uniqueId && card.mercadoria && (
-                <div className="absolute z-50 left-full ml-2 top-0 bg-gray-900 text-white px-3 py-2 rounded-lg shadow-xl border border-gray-600 min-w-[200px] max-w-[300px] pointer-events-none">
+                <div 
+                  className="fixed bg-gray-900 text-white px-3 py-2 rounded-lg shadow-2xl border-2 border-white min-w-[200px] max-w-[300px] pointer-events-none"
+                  style={{
+                    left: `${card.col * cellWidth + cellWidth + 10}px`,
+                    top: `${card.row * cellHeight + 2}px`,
+                    zIndex: 200
+                  }}
+                >
                   <div className="text-xs font-semibold mb-1">Mercadoria:</div>
                   <div className="text-xs">{card.mercadoria}</div>
                 </div>
               )}
-            </div>
+            </React.Fragment>
           );
         })}
       </div>
