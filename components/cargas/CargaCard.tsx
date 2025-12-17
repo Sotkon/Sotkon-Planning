@@ -43,10 +43,37 @@ export default function CargaCard({ carga, language }: CargaCardProps) {
     es: { 0: 'ENE', 1: 'FEB', 2: 'MAR', 3: 'ABR', 4: 'MAY', 5: 'JUN', 6: 'JUL', 7: 'AGO', 8: 'SEP', 9: 'OCT', 10: 'NOV', 11: 'DIC' }
   };
 
-  const data = carga.dataPrevistaDeCarga ? new Date(carga.dataPrevistaDeCarga) : null;
-  const diaSemana = data ? diasSemana[language]?.[data.getDay()] || diasSemana.pt[data.getDay()] : '';
-  const dia = data ? String(data.getDate()).padStart(2, '0') : '';
-  const mes = data ? meses[language]?.[data.getMonth()] || meses.pt[data.getMonth()] : '';
+  // ✅ CORREÇÃO: Processar data SEM timezone
+  let diaSemana = '';
+  let dia = '';
+  let mes = '';
+
+  if (carga.dataPrevistaDeCarga) {
+    // Converter para string e extrair componentes
+    const dataStr = String(carga.dataPrevistaDeCarga);
+    
+    // Se for string ISO (2025-09-30T00:00:00 ou 2025-09-30)
+    const partes = dataStr.split('T')[0].split('-');
+    
+    if (partes.length === 3) {
+      const ano = parseInt(partes[0]);
+      const mesNum = parseInt(partes[1]) - 1; // JS months são 0-indexed
+      const diaNum = parseInt(partes[2]);
+      
+      // Criar data LOCAL (sem timezone)
+      const data = new Date(ano, mesNum, diaNum);
+      
+      diaSemana = diasSemana[language]?.[data.getDay()] || diasSemana.pt[data.getDay()];
+      dia = String(diaNum).padStart(2, '0');
+      mes = meses[language]?.[mesNum] || meses.pt[mesNum];
+    } else {
+      // Fallback para Date normal se não for ISO string
+      const data = new Date(carga.dataPrevistaDeCarga);
+      diaSemana = diasSemana[language]?.[data.getDay()] || diasSemana.pt[data.getDay()];
+      dia = String(data.getDate()).padStart(2, '0');
+      mes = meses[language]?.[data.getMonth()] || meses.pt[data.getMonth()];
+    }
+  }
 
   const headerClass = estadoClasses[carga.estadoId] || 'bg-gray-400';
   
@@ -85,7 +112,7 @@ export default function CargaCard({ carga, language }: CargaCardProps) {
 
       {/* Body */}
       <div className="p-4 bg-white">
-        <h3 className="text-center font-bold text-base mb-3 truncate  text-black"  >
+        <h3 className="text-center font-bold text-base mb-3 truncate text-black">
           {clienteTruncado}
         </h3>
         
