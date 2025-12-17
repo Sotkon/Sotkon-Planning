@@ -33,7 +33,7 @@ export default function FactoryLayoutPlanner() {
   });
   const [saveIndicator, setSaveIndicator] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [hoveredOrderId, setHoveredOrderId] = useState(null);
+  const [hoveredCardId, setHoveredCardId] = useState(null);
   
   const canvasRefs = {
     month1: useRef(null),
@@ -326,7 +326,7 @@ export default function FactoryLayoutPlanner() {
                   }`}
                 >
                   <div className="w-full h-full flex items-center justify-center text-xs text-white font-bold">
-                    {!isOccupied && `${row},${col}`}
+                    {!isOccupied && `${row * GRID_COLS + col}`}
                   </div>
                 </div>
               );
@@ -449,8 +449,8 @@ export default function FactoryLayoutPlanner() {
                   key={order.id}
                   className="rounded-lg relative"
                   style={{ backgroundColor: estadoColors[order.estadoId] || '#6B7280' }}
-                  onMouseEnter={() => setHoveredOrderId(order.id)}
-                  onMouseLeave={() => setHoveredOrderId(null)}
+                  onMouseEnter={() => setHoveredCardId(order.id)}
+                  onMouseLeave={() => setHoveredCardId(null)}
                 >
                   <div
                     draggable
@@ -489,7 +489,7 @@ export default function FactoryLayoutPlanner() {
       </div>
 
       {/* Main Calendar Area - 3 Months Vertical */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         <div className="p-4 bg-gray-800 border-b border-gray-700">
           <div className="flex items-center justify-between">
             <div>
@@ -507,19 +507,19 @@ export default function FactoryLayoutPlanner() {
           </div>
         </div>
 
-        <div className="flex-1 p-6 overflow-auto">
-          {/* Factory Layout Image - Fixed at top */}
-          <div className="sticky top-0 z-20 mb-6 rounded-lg overflow-hidden border-2 border-gray-600 bg-white shadow-lg">
-            <img 
-              src="/Layout_fábrica_h.png" 
-              alt="Layout Fábrica" 
-              className="w-full h-auto"
-              onError={(e) => {
-                e.target.style.display = 'none';
-              }}
-            />
-          </div>
+        {/* Factory Layout Image - Fixed at top */}
+        <div className="bg-white border-b-2 border-gray-600 shadow-lg">
+          <img 
+            src="/Layout_fábrica_h.png" 
+            alt="Layout Fábrica" 
+            className="w-full h-auto"
+            onError={(e) => {
+              e.target.style.display = 'none';
+            }}
+          />
+        </div>
 
+        <div className="flex-1 p-6 overflow-auto">
           {/* Months - Vertical Layout */}
           <div className="space-y-6">
             {renderMonth('month1')}
