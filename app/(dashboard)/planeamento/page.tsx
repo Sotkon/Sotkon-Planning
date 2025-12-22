@@ -211,7 +211,6 @@ export default function DragDropCalendarBoard() {
                 onDragStart={(e) => handleDragStart(e, order)}
                 className={`${getOrderColor(order.estadoId)} p-3 rounded cursor-move hover:opacity-80 transition-opacity shadow-lg`}
               >
-                <div className="font-bold text-sm mb-1">{order.encomendaPrimavera}</div>
                 <div className="text-xs opacity-90 mb-1">
                   <strong>Cliente:</strong> {order.cliente}
                 </div>
@@ -225,30 +224,7 @@ export default function DragDropCalendarBoard() {
                     <strong>Projecto:</strong> {order.projecto}
                   </div>
                 )}
-                <div className="text-xs opacity-75 mb-1">
-                  <strong>Estado:</strong> {order.estadoDesc}
                 </div>
-                {order.dataPrevistaDeCarga && (
-                  <div className="text-xs opacity-75 mb-1">
-                    <strong>Data Prevista:</strong> {new Date(order.dataPrevistaDeCarga).toLocaleDateString('pt-PT')}
-                  </div>
-                )}
-                {order.localizacao && (
-                  <div className="text-xs opacity-75 mb-1">
-                    <strong>Localização:</strong> {order.localizacao}
-                  </div>
-                )}
-                {order.transportador && (
-                  <div className="text-xs opacity-75 mb-1">
-                    <strong>Transportador:</strong> {order.transportador}
-                  </div>
-                )}
-                {order.observacoes && (
-                  <div className="text-xs opacity-75 italic mt-2 pt-2 border-t border-white/20">
-                    <strong>Obs:</strong> {order.observacoes}
-                  </div>
-                )}
-              </div>
             ))}
             {orders.length === 0 && (
               <div className="text-gray-500 text-center py-8">
