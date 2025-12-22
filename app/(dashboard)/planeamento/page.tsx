@@ -224,6 +224,11 @@ export default function DragDropCalendarBoard() {
                     <strong>Projecto:</strong> {order.projecto}
                   </div>
                 )}
+                {order.mercadoria && (
+                  <div className="text-xs opacity-90 mb-1">
+                    <strong>Mercadoria:</strong> {order.mercadoria}
+                  </div>
+                )}
                 </div>
             ))}
             {orders.length === 0 && (
