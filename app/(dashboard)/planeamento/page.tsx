@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Search, X, Calendar as CalendarIcon, Filter, RefreshCw, Maximize2, XCircle } from 'lucide-react';
+import { Loader2, Search, X, Calendar as CalendarIcon, Filter, XCircle, AlertCircle } from 'lucide-react';
 
 // --- COMPONENTE MODAL DE DETALHES ---
 const OrderDetailModal = ({ order, onClose }) => {
@@ -11,7 +11,6 @@ const OrderDetailModal = ({ order, onClose }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-neutral-900 border border-neutral-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header Modal */}
         <div className="p-6 border-b border-neutral-800 flex justify-between items-start bg-neutral-800/50">
           <div>
             <h2 className="text-2xl font-bold text-white mb-1 flex items-center gap-3">
@@ -29,7 +28,6 @@ const OrderDetailModal = ({ order, onClose }) => {
           </button>
         </div>
 
-        {/* Content Modal */}
         <div className="p-6 overflow-y-auto space-y-6 text-sm">
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-1">
@@ -48,24 +46,11 @@ const OrderDetailModal = ({ order, onClose }) => {
                 {order.mercadoria || 'Sem descrição de mercadoria.'}
               </div>
             </div>
-            {/* Adicione mais campos aqui conforme o seu objeto 'encomendas.tsx' */}
-            <div className="space-y-1">
-              <span className="text-xs font-bold text-gray-500 uppercase">País</span>
-              <p className="text-gray-200">{order.paisDesc || '-'}</p>
-            </div>
-            <div className="space-y-1">
-              <span className="text-xs font-bold text-gray-500 uppercase">Zona</span>
-              <p className="text-gray-200">{order.zona || '-'}</p>
-            </div>
           </div>
         </div>
 
-        {/* Footer Modal */}
         <div className="p-4 border-t border-neutral-800 bg-neutral-950 flex justify-end">
-          <button 
-            onClick={onClose}
-            className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg transition-colors font-medium"
-          >
+          <button onClick={onClose} className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg font-medium">
             Fechar
           </button>
         </div>
@@ -82,7 +67,7 @@ export default function DragDropCalendarBoard() {
   
   const [calendar, setCalendar] = useState<Record<string, any[]>>({}); 
   const [draggedOrder, setDraggedOrder] = useState<any>(null);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null); // Para o Modal
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
   
   const [searchText, setSearchText] = useState('');
   const [activeFilters, setActiveFilters] = useState([1, 2, 3]);
@@ -107,12 +92,10 @@ export default function DragDropCalendarBoard() {
     refetchInterval: 30000 
   });
 
-  // Funções de Filtro Partilhadas (usadas tanto no painel esquerdo como no calendário)
+  // Funções de Filtro Partilhadas
   const matchesFilter = (order) => {
-    // 1. Filtro de Estado
     if (!activeFilters.includes(Number(order.estadoId))) return false;
     
-    // 2. Filtro de Texto
     if (searchText) {
       const s = searchText.toLowerCase();
       return (
@@ -125,14 +108,13 @@ export default function DragDropCalendarBoard() {
     return true;
   };
 
-  // 2. Sincronização Calendário
+  // 2. Sincronização Calendário (Correção: Ignora estado 1 mesmo que tenha data)
   useEffect(() => {
     if (ordersData?.items) {
       const newCalendar: Record<string, any[]> = {};
       ordersData.items.forEach((order: any) => {
-        // Regra Especial: Encomendas "Nova" (1) NUNCA vão para o calendário automaticamente,
-        // mesmo que tenham data (ignora data de fim de ano).
-        // Apenas estados 2 e 3 com data válida aparecem no calendário.
+        // Encomendas "Nova" (1) só vão para o calendário se o utilizador as arrastar explicitamente nesta sessão.
+        // Se vierem da BD como estado 1 mas com data, ignoramos a data para forçar a aparecer à esquerda.
         if (order.dataPrevistaDeCarga && Number(order.estadoId) !== 1) {
           const date = new Date(order.dataPrevistaDeCarga);
           const dateKey = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
@@ -149,32 +131,55 @@ export default function DragDropCalendarBoard() {
     if (!ordersData?.items) return [];
 
     return ordersData.items.filter((order: any) => {
-      // Aparece à esquerda se:
-      // A. É "Nova" (1) (Sempre à esquerda por defeito)
-      // OU
-      // B. Não tem data definida
+      // Aparece à esquerda se é Estado 1 OU se não tem data definida
+      // (Isto garante que se removermos do calendário, ela volta para aqui)
       const isPending = Number(order.estadoId) === 1 || !order.dataPrevistaDeCarga;
-
       return isPending && matchesFilter(order);
     });
   }, [ordersData, activeFilters, searchText]);
 
-  // Drag & Drop Logic
+  // --- LÓGICA DE DRAG & DROP CORRIGIDA ---
+
+  const handleDragStart = (e: React.DragEvent, order: any) => {
+    setDraggedOrder(order);
+    e.dataTransfer.effectAllowed = 'move';
+    // Opcional: imagem fantasma personalizada
+  };
+
   const handleDrop = async (e: React.DragEvent, day: number) => {
     e.preventDefault();
     if (!draggedOrder) return;
 
     const scheduledDate = new Date(year, month, day, 12, 0, 0);
-    const dateKey = `${year}-${month + 1}-${day}`;
+    const newDateKey = `${year}-${month + 1}-${day}`;
     
-    // UI Update Otimista
-    setCalendar(prev => ({
-      ...prev,
-      [dateKey]: [...(prev[dateKey] || []), draggedOrder]
-    }));
+    // 1. ATUALIZAÇÃO VISUAL IMEDIATA (Optimistic UI)
+    setCalendar(prev => {
+      const newCal = { ...prev };
+      
+      // A. Remover da data antiga (se existia noutro dia do calendário)
+      Object.keys(newCal).forEach(key => {
+        newCal[key] = newCal[key].filter(o => o.id !== draggedOrder.id);
+      });
 
-    // Se a encomenda for "Nova" (1), ao arrastar para o calendário passa a "Agendada" (3)
-    // para garantir que ela "fica" no calendário e sai da esquerda.
+      // B. Adicionar à nova data
+      if (!newCal[newDateKey]) newCal[newDateKey] = [];
+      
+      // Se era "Nova" (1), visualmente passa a "Agendada" (3) para ficar azul/correta no calendário
+      const optimisticOrder = {
+        ...draggedOrder,
+        dataPrevistaDeCarga: scheduledDate.toISOString(),
+        estadoId: Number(draggedOrder.estadoId) === 1 ? 3 : draggedOrder.estadoId
+      };
+      
+      newCal[newDateKey].push(optimisticOrder);
+      return newCal;
+    });
+
+    setDraggedOrder(null);
+
+    // 2. GRAVAÇÃO NA API
+    // Se for "Nova" (1), forçamos a mudança para "Agendada" (3) para persistir no calendário
     const newEstadoId = Number(draggedOrder.estadoId) === 1 ? 3 : draggedOrder.estadoId;
 
     try {
@@ -186,31 +191,59 @@ export default function DragDropCalendarBoard() {
             estadoId: newEstadoId 
         })
       });
+      // Importante: Refetch para garantir sincronia final com backend
       refetch();
     } catch (err) {
-      alert("Erro ao gravar.");
-      refetch();
+      alert("Erro ao gravar alteração.");
+      refetch(); // Reverte em caso de erro
     }
-    setDraggedOrder(null);
   };
 
+  // --- REMOÇÃO CORRIGIDA ---
   const handleRemoveDate = async (order: any, e: React.MouseEvent) => {
-    e.stopPropagation(); // Evita abrir o modal ao clicar no botão de remover
-    if(!confirm("Deseja retirar esta encomenda do planeamento?")) return;
+    e.stopPropagation();
+    if(!confirm("Deseja retirar esta encomenda do calendário e voltar aos pendentes?")) return;
 
+    // 1. ATUALIZAÇÃO VISUAL IMEDIATA (Remove do calendário)
+    setCalendar(prev => {
+      const newCal = { ...prev };
+      Object.keys(newCal).forEach(key => {
+        newCal[key] = newCal[key].filter(o => o.id !== order.id);
+      });
+      return newCal;
+    });
+
+    // 2. API CALL
     try {
+      // Se a encomenda era originalmente "Nova" (ou se quisermos forçar), 
+      // podemos enviar estadoId: 1 para ela voltar a ficar amarela na esquerda.
+      // Se não, basta limpar a data. Aqui, por segurança, volto a colocar estadoId: 1 se estava planeada.
+      
+      // Lógica: Se retiramos do calendário, ela volta a ser "pendente" (Nova ou A Definir).
+      // Se for estado 3 (Agendada), faz sentido voltar a 1 (Nova) ou 2 (A Definir)? 
+      // Vou assumir que volta ao estado original se possível, mas forçar estadoId: 1 garante que aparece na esquerda.
+      
+      const payload: any = { dataPrevistaDeCarga: null };
+      
+      // Se quiser que ao remover volte a ser "Nova" (amarela):
+      if (Number(order.estadoId) === 3) {
+         payload.estadoId = 1; 
+      }
+
       await fetch(`/api/cargas/${order.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dataPrevistaDeCarga: null })
+        body: JSON.stringify(payload)
       });
-      refetch();
+      
+      refetch(); // Isto fará com que ela reapareça na lista da esquerda
     } catch (err) {
       console.error(err);
+      alert("Erro ao remover.");
+      refetch();
     }
   };
 
-  // Renderização do Cartão (Reutilizável para Esquerda e Direita)
   const renderCardContent = (order) => (
     <>
       <div className="flex justify-between items-start mb-1">
@@ -260,7 +293,6 @@ export default function DragDropCalendarBoard() {
   return (
     <div className="flex h-screen bg-neutral-950 text-white p-4 gap-4 overflow-hidden font-sans">
       
-      {/* Modal de Detalhes */}
       {selectedOrder && (
         <OrderDetailModal 
           order={selectedOrder} 
@@ -303,7 +335,7 @@ export default function DragDropCalendarBoard() {
                 className={`flex-1 text-[10px] py-1.5 rounded-md font-bold uppercase tracking-wide transition-all border ${
                   activeFilters.includes(id) 
                   ? (id === 1 ? 'bg-yellow-400 text-black border-yellow-400' : id === 2 ? 'bg-amber-700 text-white border-amber-700' : 'bg-blue-600 text-white border-blue-600')
-                  : 'bg-transparent text-gray-300 border-neutral-700 hover:border-neutral-500' // Texto mais claro
+                  : 'bg-transparent text-gray-300 border-neutral-700 hover:border-neutral-500'
                 }`}
               >
                 {id === 1 ? 'Nova' : id === 2 ? 'Definir' : 'Agend.'}
@@ -317,18 +349,11 @@ export default function DragDropCalendarBoard() {
             <div
               key={order.id}
               draggable
-              onDragStart={() => setDraggedOrder(order)}
+              onDragStart={(e) => handleDragStart(e, order)}
               onClick={() => setSelectedOrder(order)}
-              className={`${getOrderColor(order.estadoId)} p-3 rounded-lg cursor-pointer border hover:brightness-110 active:scale-[0.98] transition-all shadow-md group`}
+              className={`${getOrderColor(order.estadoId)} p-3 rounded-lg cursor-grab active:cursor-grabbing border hover:brightness-110 active:scale-[0.98] transition-all shadow-md group`}
             >
               {renderCardContent(order)}
-              
-              {/* Badge indicando se tem data (mas é Nova) */}
-              {order.dataPrevistaDeCarga && Number(order.estadoId) === 1 && (
-                <div className="mt-2 pt-2 border-t border-black/10 text-[9px] flex items-center justify-between opacity-75">
-                  <span>📅 {new Date(order.dataPrevistaDeCarga).toLocaleDateString()} (Ignorada)</span>
-                </div>
-              )}
             </div>
           ))}
           {ordersLeftPanel.length === 0 && (
@@ -348,10 +373,9 @@ export default function DragDropCalendarBoard() {
               {new Intl.DateTimeFormat('pt', { month: 'long' }).format(currentMonth)}
               <span className="text-neutral-600 font-medium">{year}</span>
             </h2>
-            {/* Indicador de Filtro Ativo no Calendário */}
             {(searchText || activeFilters.length < 3) && (
               <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-1 rounded border border-blue-500/20 flex items-center gap-1">
-                <Filter className="w-3 h-3" /> Filtros aplicados ao calendário
+                <Filter className="w-3 h-3" /> Filtros aplicados
               </span>
             )}
           </div>
@@ -374,7 +398,6 @@ export default function DragDropCalendarBoard() {
               const isValid = day > 0 && day <= daysInMonth;
               const dateKey = `${year}-${month + 1}-${day}`;
               
-              // Aplicar filtro também aqui!
               const dayOrders = (calendar[dateKey] || []).filter(matchesFilter);
 
               return (
@@ -394,12 +417,13 @@ export default function DragDropCalendarBoard() {
                         {dayOrders.map((o: any) => (
                           <div
                             key={o.id}
+                            draggable // PERMITE ARRASTAR DE VOLTA OU PARA OUTRO DIA
+                            onDragStart={(e) => handleDragStart(e, o)}
                             onClick={() => setSelectedOrder(o)}
-                            className={`${getOrderColor(o.estadoId)} p-2 rounded border shadow-sm cursor-pointer hover:scale-[1.02] hover:shadow-lg transition-all relative group`}
+                            className={`${getOrderColor(o.estadoId)} p-2 rounded border shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.02] hover:shadow-lg transition-all relative group`}
                           >
                             {renderCardContent(o)}
                             
-                            {/* Botão X para remover (só aparece no hover) */}
                             <button 
                               onClick={(e) => handleRemoveDate(o, e)}
                               className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-600 z-10"
