@@ -2,35 +2,33 @@
 
 import React, { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Search, Filter, X } from 'lucide-react';
+import { Loader2, Search, X, Calendar as CalendarIcon, Filter } from 'lucide-react';
 
 export default function DragDropCalendarBoard() {
   const language = 'pt';
   const [currentMonth, setCurrentMonth] = useState(new Date());
   
-  // Estado do Calendário (Começa vazio para planeamento manual)
+  // Estado do Calendário (Começa vazio conforme solicitado para planeamento manual)
   const [calendar, setCalendar] = useState({}); 
   const [draggedOrder, setDraggedOrder] = useState(null);
   
-  // --- NOVOS ESTADOS PARA PESQUISA E FILTRO ---
+  // Estados para Pesquisa e Filtros
   const [searchText, setSearchText] = useState('');
-  // Por defeito, mostramos os 3 estados: 1 (Nova), 2 (A Definir), 3 (Agendada)
-  const [activeFilters, setActiveFilters] = useState([1, 2, 3]);
+  const [activeFilters, setActiveFilters] = useState([1, 2, 3]); // Nova, A Definir, Agendada
 
   const queryClient = useQueryClient();
 
-  // 1. Fetch dos dados
+  // 1. Fetch dos dados da API
   const { data: ordersData, isLoading, refetch } = useQuery({
     queryKey: ['all-orders', language],
     queryFn: async () => {
       const params = new URLSearchParams({
         dataInicio: new Date().getFullYear() + '-01-01',
         language: language,
-        // Garantimos que pedimos todos os estados relevantes
-        estadoId: '1,2,3,4,5,6,7,8', 
+        estadoId: '1,2,3', // Focamos nos estados que interessam ao planeamento
         countryId: '0',
         pageIndex: '0',
-        pageSize: '1000', // Aumentei para garantir que apanha tudo
+        pageSize: '1000', 
         textToSearch: ''
       });
 
@@ -41,44 +39,44 @@ export default function DragDropCalendarBoard() {
     staleTime: 30000
   });
 
-  // Configuração dos Filtros (Cores e Labels)
+  // Configuração visual dos Filtros
   const filterOptions = [
     { id: 1, label: 'Nova', color: 'bg-yellow-400', text: 'text-yellow-950' },
     { id: 2, label: 'A Definir', color: 'bg-amber-700', text: 'text-white' },
     { id: 3, label: 'Agendada', color: 'bg-blue-500', text: 'text-white' },
   ];
 
-  // Alternar filtro de estado
   const toggleFilter = (id) => {
     setActiveFilters(prev => 
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
   };
 
-  // 2. Lógica Combinada de Filtragem (Painel Esquerdo)
+  // 2. Lógica de Filtragem com REFORÇO de Tipagem
   const ordersLeftPanel = useMemo(() => {
     if (!ordersData?.items) return [];
 
-    // IDs que já estão no calendário visual (para não duplicar)
+    // IDs que já estão no calendário visual nesta sessão
     const scheduledIds = Object.values(calendar).flat().map((o: any) => o.id);
 
     return ordersData.items.filter(order => {
-      // A. Filtro de "Já está no calendário?"
+      // Normalização: Converter estado para Número para garantir comparação correta
+      const currentEstadoId = Number(order.estadoId);
+
+      // A. Filtro: Se já foi arrastada para o calendário, retira da esquerda
       if (scheduledIds.includes(order.id)) return false;
 
-      // B. Filtro de Estado (Checkbox/Botões)
-      // Só mostra se o estado da encomenda estiver na lista de filtros ativos
-      if (!activeFilters.includes(order.estadoId)) return false;
+      // B. Filtro de Estado: Só mostra se o ID estiver nos filtros ativos
+      if (!activeFilters.includes(currentEstadoId)) return false;
 
-      // C. Filtro de Texto (Pesquisa)
-      if (searchText) {
+      // C. Filtro de Pesquisa (Reforçado)
+      if (searchText.trim() !== '') {
         const searchLower = searchText.toLowerCase();
         const matchCliente = order.cliente?.toLowerCase().includes(searchLower);
         const matchEnc = order.encomendaPrimavera?.toLowerCase().includes(searchLower);
-        const matchProj = order.projecto?.toLowerCase().includes(searchLower);
-        const matchMerc = order.mercadoria?.toLowerCase().includes(searchLower);
+        const matchObra = order.obra?.toLowerCase().includes(searchLower);
         
-        if (!matchCliente && !matchEnc && !matchProj && !matchMerc) return false;
+        if (!matchCliente && !matchEnc && !matchObra) return false;
       }
 
       return true;
@@ -93,24 +91,17 @@ export default function DragDropCalendarBoard() {
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
     const startingDayOfWeek = firstDay.getDay();
-
     return { daysInMonth, startingDayOfWeek, year, month };
   };
 
   const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentMonth);
 
   const getOrderColor = (estadoId) => {
-    const colors = {
-      1: 'bg-yellow-400',    // NOVA
-      2: 'bg-amber-700',     // A DEFINIR
-      3: 'bg-blue-500',      // AGENDADA
-      4: 'bg-green-500',     // REALIZADA
-      5: 'bg-purple-500',
-      6: 'bg-orange-500',
-      7: 'bg-red-500',
-      8: 'bg-pink-500'
-    };
-    return colors[estadoId] || 'bg-gray-500';
+    const id = Number(estadoId);
+    if (id === 1) return 'bg-yellow-400 text-yellow-950';
+    if (id === 2) return 'bg-amber-700 text-white';
+    if (id === 3) return 'bg-blue-500 text-white';
+    return 'bg-gray-500 text-white';
   };
 
   const handleDragStart = (e, order) => {
@@ -130,12 +121,7 @@ export default function DragDropCalendarBoard() {
     const dateKey = `${year}-${month + 1}-${day}`;
     const scheduledDate = new Date(year, month, day, 12, 0, 0);
 
-    const existingOrders = calendar[dateKey] || [];
-    if (existingOrders.some(o => o.id === draggedOrder.id)) {
-      setDraggedOrder(null);
-      return; 
-    }
-
+    // Atualização UI
     setCalendar(prev => ({
       ...prev,
       [dateKey]: [...(prev[dateKey] || []), { ...draggedOrder, dataPrevistaDeCarga: scheduledDate.toISOString() }]
@@ -143,6 +129,7 @@ export default function DragDropCalendarBoard() {
 
     setDraggedOrder(null);
 
+    // Update na Base de Dados
     try {
       await fetch(`/api/cargas/${draggedOrder.id}`, {
         method: 'PATCH',
@@ -150,8 +137,8 @@ export default function DragDropCalendarBoard() {
         body: JSON.stringify({ dataPrevistaDeCarga: scheduledDate.toISOString() })
       });
     } catch (error) {
-      console.error('Failed to update order:', error);
-      alert("Erro ao guardar. A reverter...");
+      console.error('Erro ao salvar:', error);
+      alert("Erro ao comunicar com o servidor.");
       setCalendar(prev => ({
         ...prev,
         [dateKey]: prev[dateKey].filter(o => o.id !== draggedOrder.id)
@@ -160,10 +147,10 @@ export default function DragDropCalendarBoard() {
   };
 
   const handleRemoveFromCalendar = async (dateKey, order) => {
-    setCalendar(prev => {
-      const newDayList = prev[dateKey].filter(o => o.id !== order.id);
-      return { ...prev, [dateKey]: newDayList };
-    });
+    setCalendar(prev => ({
+      ...prev,
+      [dateKey]: prev[dateKey].filter(o => o.id !== order.id)
+    }));
 
     try {
       await fetch(`/api/cargas/${order.id}`, {
@@ -172,20 +159,12 @@ export default function DragDropCalendarBoard() {
         body: JSON.stringify({ dataPrevistaDeCarga: null })
       });
     } catch (error) {
-      console.error('Failed to remove order schedule:', error);
-      setCalendar(prev => ({
-        ...prev,
-        [dateKey]: [...(prev[dateKey] || []), order]
-      }));
+      console.error('Erro ao remover:', error);
     }
   };
 
   const changeMonth = (direction) => {
-    setCurrentMonth(prev => {
-      const newDate = new Date(prev);
-      newDate.setMonth(prev.getMonth() + direction);
-      return newDate;
-    });
+    setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + direction, 1));
   };
 
   const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -193,199 +172,169 @@ export default function DragDropCalendarBoard() {
 
   const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-  const renderCalendarDays = () => {
-    const days = [];
-    const totalCells = Math.ceil((daysInMonth + startingDayOfWeek) / 7) * 7;
-
-    for (let i = 0; i < totalCells; i++) {
-      const day = i - startingDayOfWeek + 1;
-      const isValidDay = day > 0 && day <= daysInMonth;
-      const dateKey = `${year}-${month + 1}-${day}`;
-      const ordersForDay = calendar[dateKey] || [];
-
-      days.push(
-        <div
-          key={i}
-          onDragOver={handleDragOver}
-          onDrop={isValidDay ? (e) => handleDrop(e, day) : null}
-          className={`min-h-32 border border-gray-700 p-2 transition-colors ${
-            isValidDay
-              ? 'bg-neutral-800 hover:bg-neutral-700'
-              : 'bg-neutral-900'
-          }`}
-        >
-          {isValidDay && (
-            <>
-              <div className="text-sm text-gray-300 mb-2 font-bold">{day}</div>
-              <div className="space-y-1">
-                {ordersForDay.map(order => (
-                  <div
-                    key={order.id}
-                    className={`${getOrderColor(order.estadoId)} text-white text-xs p-2 rounded cursor-pointer hover:brightness-110 transition-all shadow-sm group relative`}
-                    onClick={() => handleRemoveFromCalendar(dateKey, order)}
-                  >
-                    <div className="font-bold flex justify-between">
-                      <span>{order.encomendaPrimavera || 'S/ Ref'}</span>
-                    </div>
-                    <div className="text-[10px] truncate">{order.cliente}</div>
-                     <div className="hidden group-hover:block absolute z-50 bottom-full left-0 bg-black text-white p-2 text-xs rounded w-max shadow-xl border border-gray-600">
-                      Clique para devolver à lista
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      );
-    }
-    return days;
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-neutral-900">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-        <span className="ml-3 text-white">A carregar plano de montagem...</span>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex h-screen bg-neutral-900 text-white p-4 gap-4">
-      {/* Painel Esquerdo - A Planear */}
-      <div className="w-80 flex flex-col bg-neutral-800 rounded-lg border border-gray-700">
-        
-        {/* Header do Painel com Pesquisa e Filtros */}
-        <div className="p-3 border-b border-gray-700 bg-neutral-800 rounded-t-lg z-10 shadow-md space-y-3">
+    <div className="flex h-screen bg-neutral-950 text-white p-4 gap-4 overflow-hidden">
+      
+      {/* PAINEL ESQUERDO */}
+      <div className="w-80 flex flex-col bg-neutral-900 rounded-xl border border-neutral-800 shadow-2xl">
+        <div className="p-4 border-b border-neutral-800 space-y-4">
           <div className="flex items-center justify-between">
-             <h2 className="text-base font-bold text-white">
-              A Planear <span className="text-xs font-normal text-gray-400">({ordersLeftPanel.length})</span>
+            <h2 className="font-bold text-lg flex items-center gap-2">
+              <Filter className="w-4 h-4 text-blue-500" /> A Planear
             </h2>
+            <span className="bg-neutral-800 px-2 py-0.5 rounded text-xs text-neutral-400">
+              {ordersLeftPanel.length}
+            </span>
           </div>
 
-          {/* Barra de Pesquisa */}
+          {/* Pesquisa */}
           <div className="relative">
-            <Search className="absolute left-2 top-2 h-4 w-4 text-gray-500" />
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-neutral-500" />
             <input 
               type="text" 
-              placeholder="Pesquisar cliente, obra..." 
+              placeholder="Pesquisar encomenda..." 
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="w-full bg-neutral-900 border border-gray-600 rounded p-1.5 pl-8 text-sm text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg py-2 pl-10 pr-8 text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
             />
             {searchText && (
-              <button onClick={() => setSearchText('')} className="absolute right-2 top-2 text-gray-400 hover:text-white">
+              <button onClick={() => setSearchText('')} className="absolute right-2 top-2.5 text-neutral-500 hover:text-white">
                 <X className="h-4 w-4" />
               </button>
             )}
           </div>
 
-          {/* Filtros de Estado */}
-          <div className="flex gap-2 justify-between">
+          {/* Botões de Filtro */}
+          <div className="flex gap-1.5">
             {filterOptions.map(opt => (
               <button
                 key={opt.id}
                 onClick={() => toggleFilter(opt.id)}
-                className={`flex-1 text-[10px] py-1 px-1 rounded font-bold border transition-all ${
+                className={`flex-1 text-[10px] py-2 rounded-md font-bold border transition-all ${
                   activeFilters.includes(opt.id)
-                    ? `${opt.color} ${opt.text} border-transparent shadow-sm opacity-100`
-                    : 'bg-transparent border-gray-600 text-gray-500 opacity-50 hover:opacity-75'
+                    ? `${opt.color} ${opt.text} border-transparent shadow-lg`
+                    : 'bg-neutral-800 border-neutral-700 text-neutral-500 opacity-40'
                 }`}
-                title={`Mostrar/Ocultar ${opt.label}`}
               >
                 {opt.label}
               </button>
             ))}
           </div>
         </div>
-        
-        {/* Lista de Encomendas */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+
+        {/* Lista Scrollable */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
           {ordersLeftPanel.map(order => (
             <div
               key={order.id}
               draggable
               onDragStart={(e) => handleDragStart(e, order)}
-              className={`${getOrderColor(order.estadoId)} p-2.5 rounded cursor-move hover:brightness-110 transition-all shadow-md border border-white/10 active:scale-95 group`}
+              className={`${getOrderColor(order.estadoId)} p-3 rounded-lg cursor-grab active:cursor-grabbing hover:scale-[1.02] transition-transform shadow-md border border-white/5 relative group`}
             >
-              <div className="flex justify-between items-start mb-1">
-                <span className="font-bold text-xs shadow-black/10 drop-shadow-md">{order.encomendaPrimavera || 'S/ Ref'}</span>
-                {/* Badge pequena do estado */}
-                <div className="w-2 h-2 rounded-full bg-white/40 shadow-sm" title={order.estadoDesc} />
+              <div className="text-[10px] font-black uppercase opacity-60 mb-1 leading-none">
+                {order.encomendaPrimavera || 'Sem Ref.'}
               </div>
-              
-              <div className="text-xs font-medium mb-1 truncate drop-shadow-sm">
+              <div className="text-sm font-bold leading-tight line-clamp-2">
                 {order.cliente}
               </div>
-              
-              {order.projecto && (
-                <div className="text-[10px] opacity-90 truncate mb-1">
-                 File: {order.projecto}
-                </div>
-              )}
-
-              {order.mercadoria && (
-                <div className="text-[10px] opacity-80 line-clamp-2 italic bg-black/10 p-1 rounded mt-1">
-                  {order.mercadoria}
-                </div>
-              )}
-
-              {/* Se tiver data prevista na BD mas não no calendário visual */}
-              {order.dataPrevistaDeCarga && (
-                <div className="mt-2 text-[9px] flex items-center justify-between opacity-80 border-t border-black/10 pt-1">
-                   <span>📅 {new Date(order.dataPrevistaDeCarga).toLocaleDateString()}</span>
-                   <span className="italic text-[8px]">(Data BD)</span>
+              {order.obra && (
+                <div className="text-[11px] mt-1 opacity-80 italic truncate">
+                  Obra: {order.obra}
                 </div>
               )}
             </div>
           ))}
-
-          {ordersLeftPanel.length === 0 && (
-            <div className="text-gray-500 text-center py-10 px-4">
-              <Filter className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Nenhuma encomenda encontrada.</p>
-              <p className="text-xs mt-1">Verifique os filtros de estado ou a pesquisa.</p>
+          {ordersLeftPanel.length === 0 && !isLoading && (
+            <div className="text-center py-20 text-neutral-600 px-4">
+              <Search className="w-10 h-10 mx-auto mb-2 opacity-20" />
+              <p className="text-sm italic">Nenhuma encomenda disponível com os filtros atuais.</p>
             </div>
+          )}
+          {isLoading && (
+             <div className="flex justify-center py-10">
+               <Loader2 className="animate-spin text-blue-500" />
+             </div>
           )}
         </div>
       </div>
 
-      {/* Painel Direito - Calendário (Inalterado na lógica, apenas ajustes visuais) */}
-      <div className="flex-1 bg-neutral-800 rounded-lg p-4 border border-gray-700 overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={() => changeMonth(-1)}
-            className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded text-sm font-medium transition-colors border border-gray-600"
-          >
-            ← Anterior
-          </button>
-          <div className="text-center">
-             <h2 className="text-xl font-bold capitalize">
-            {monthNames[month]} <span className="text-gray-400">{year}</span>
+      {/* PAINEL DIREITO - CALENDÁRIO */}
+      <div className="flex-1 bg-neutral-900 rounded-xl border border-neutral-800 flex flex-col shadow-2xl overflow-hidden">
+        {/* Header Calendário */}
+        <div className="p-4 flex items-center justify-between border-b border-neutral-800 bg-neutral-900/50 backdrop-blur-md">
+          <div className="flex items-center gap-4">
+             <h2 className="text-xl font-black flex items-center gap-3">
+              <CalendarIcon className="text-blue-500" />
+              <span className="capitalize">{monthNames[month]}</span>
+              <span className="text-neutral-600">{year}</span>
             </h2>
           </div>
-          <button
-            onClick={() => changeMonth(1)}
-            className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded text-sm font-medium transition-colors border border-gray-600"
-          >
-            Próximo →
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-neutral-800 rounded-lg border border-neutral-700 transition-colors">←</button>
+            <button onClick={() => setCurrentMonth(new Date())} className="px-4 py-2 text-xs font-bold hover:bg-neutral-800 rounded-lg border border-neutral-700 uppercase tracking-widest">Hoje</button>
+            <button onClick={() => changeMonth(1)} className="p-2 hover:bg-neutral-800 rounded-lg border border-neutral-700 transition-colors">→</button>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-            <div className="grid grid-cols-7 gap-1 mb-1 sticky top-0 bg-neutral-800 py-2 z-10 shadow-sm">
+        {/* Grid Calendário */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="grid grid-cols-7 gap-2 mb-2">
             {dayNames.map(day => (
-                <div key={day} className="text-center font-bold text-gray-500 text-xs uppercase tracking-wider">
+              <div key={day} className="text-center text-[10px] font-black text-neutral-600 uppercase tracking-tighter py-2">
                 {day}
-                </div>
+              </div>
             ))}
-            </div>
-            <div className="grid grid-cols-7 gap-1 pb-4">
-            {renderCalendarDays()}
-            </div>
+          </div>
+
+          <div className="grid grid-cols-7 gap-2">
+            {Array.from({ length: Math.ceil((daysInMonth + startingDayOfWeek) / 7) * 7 }).map((_, i) => {
+              const day = i - startingDayOfWeek + 1;
+              const isValidDay = day > 0 && day <= daysInMonth;
+              const dateKey = `${year}-${month + 1}-${day}`;
+              const dayOrders = calendar[dateKey] || [];
+
+              return (
+                <div
+                  key={i}
+                  onDragOver={handleDragOver}
+                  onDrop={isValidDay ? (e) => handleDrop(e, day) : null}
+                  className={`min-h-[140px] rounded-xl border transition-all duration-300 ${
+                    isValidDay 
+                      ? 'bg-neutral-950/40 border-neutral-800 hover:border-neutral-600' 
+                      : 'bg-transparent border-transparent opacity-0'
+                  }`}
+                >
+                  {isValidDay && (
+                    <div className="p-2 flex flex-col h-full">
+                      <span className="text-xs font-bold text-neutral-500 mb-2">{day}</span>
+                      <div className="space-y-1.5 overflow-y-auto max-h-[100px] custom-scrollbar-mini">
+                        {dayOrders.map(order => (
+                          <div
+                            key={order.id}
+                            onClick={() => handleRemoveFromCalendar(dateKey, order)}
+                            className={`${getOrderColor(order.estadoId)} text-[10px] p-2 rounded-md font-bold cursor-pointer hover:brightness-125 shadow-sm transition-all animate-in zoom-in-95`}
+                          >
+                            <div className="truncate">{order.encomendaPrimavera}</div>
+                            <div className="truncate opacity-80 font-normal">{order.cliente}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
+
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        .custom-scrollbar-mini::-webkit-scrollbar { width: 2px; }
+        .custom-scrollbar-mini::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+      `}</style>
     </div>
   );
 }
