@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 
 export default function DragDropCalendarBoard() {
@@ -9,18 +9,19 @@ export default function DragDropCalendarBoard() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendar, setCalendar] = useState({});
   const [draggedOrder, setDraggedOrder] = useState(null);
+  const queryClient = useQueryClient();
 
-  // Fetch ALL orders from your API (not just unscheduled)
+  // Fetch ALL orders from your API
   const { data: ordersData, isLoading } = useQuery({
     queryKey: ['all-orders', language],
     queryFn: async () => {
       const params = new URLSearchParams({
         dataInicio: new Date().getFullYear() + '-01-01',
         language: language,
-        estadoId: '1,2,3,4,5,6,7,8', // All estados
-        countryId: '0', // All countries
+        estadoId: '1,2,3,4,5,6,7,8',
+        countryId: '0',
         pageIndex: '0',
-        pageSize: '500', // Get more orders for scheduling
+        pageSize: '500',
         textToSearch: ''
       });
 
@@ -29,6 +30,25 @@ export default function DragDropCalendarBoard() {
       return res.json();
     },
     staleTime: 30000
+  });
+
+  // Mutation to update order scheduled date
+  const updateOrderMutation = useMutation({
+    mutationFn: async ({ orderId, dataPrevistaDeCarga }) => {
+      const res = await fetch(`/api/cargas/${orderId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ dataPrevistaDeCarga })
+      });
+      if (!res.ok) throw new Error('Failed to update order');
+      return res.json();
+    },
+    onSuccess: () => {
+      // Refetch orders to keep everything in sync
+      queryClient.invalidateQueries(['all-orders', language]);
+    }
   });
 
   const allOrders = ordersData?.items || [];
@@ -58,17 +78,18 @@ export default function DragDropCalendarBoard() {
 
   const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentMonth);
 
-  // Get color based on estado
+  // Updated colors to match LegendaEstados.tsx
   const getOrderColor = (estadoId) => {
     const colors = {
-      1: 'bg-yellow-400',
-      2: 'bg-blue-500',
+      1: 'bg-yellow-400',    // NOVA
+      2: 'bg-blue-500',      // AGENDADA
+      8: 'bg-amber-700',     // A DEFINIR
+      5: 'bg-green-500',     // REALIZADA
+      // Keep other estados with default colors
       3: 'bg-purple-500',
       4: 'bg-orange-500',
-      5: 'bg-green-500',
       6: 'bg-red-500',
-      7: 'bg-pink-500',
-      8: 'bg-amber-700'
+      7: 'bg-pink-500'
     };
     return colors[estadoId] || 'bg-gray-500';
   };
@@ -89,36 +110,52 @@ export default function DragDropCalendarBoard() {
       const dateKey = `${year}-${month + 1}-${day}`;
       const scheduledDate = new Date(year, month, day);
 
+      // Update local state immediately
       setCalendar(prev => ({
         ...prev,
         [dateKey]: [...(prev[dateKey] || []), draggedOrder]
       }));
 
-      // TODO: Update the order in your database with the scheduled date
-      // await fetch(`/api/cargas/${draggedOrder.id}`, {
-      //   method: 'PATCH',
-      //   body: JSON.stringify({ dataPrevistaDeCarga: scheduledDate })
-      // });
+      // Save to database
+      try {
+        await updateOrderMutation.mutateAsync({
+          orderId: draggedOrder.id,
+          dataPrevistaDeCarga: scheduledDate.toISOString()
+        });
+      } catch (error) {
+        console.error('Failed to update order:', error);
+        // Optionally revert the local change if the API call fails
+        setCalendar(prev => ({
+          ...prev,
+          [dateKey]: prev[dateKey].filter(o => o.id !== draggedOrder.id)
+        }));
+      }
 
       setDraggedOrder(null);
-      // No need to refetch - the order will automatically disappear from the left pane
-      // because it's now in the calendar and filtered out
     }
   };
 
   const handleRemoveFromCalendar = async (dateKey, order) => {
+    // Update local state immediately
     setCalendar(prev => ({
       ...prev,
       [dateKey]: prev[dateKey].filter(o => o.id !== order.id)
     }));
 
-    // TODO: Remove scheduled date from database
-    // await fetch(`/api/cargas/${order.id}`, {
-    //   method: 'PATCH',
-    //   body: JSON.stringify({ dataPrevistaDeCarga: null })
-    // });
-
-    // No need to refetch - the order will automatically reappear in the left pane
+    // Remove scheduled date from database
+    try {
+      await updateOrderMutation.mutateAsync({
+        orderId: order.id,
+        dataPrevistaDeCarga: null
+      });
+    } catch (error) {
+      console.error('Failed to remove order schedule:', error);
+      // Optionally revert the local change if the API call fails
+      setCalendar(prev => ({
+        ...prev,
+        [dateKey]: [...(prev[dateKey] || []), order]
+      }));
+    }
   };
 
   const changeMonth = (direction) => {
@@ -226,10 +263,11 @@ export default function DragDropCalendarBoard() {
                 )}
                 {order.mercadoria && (
                   <div className="text-xs opacity-90 mb-1">
-                    <strong>Mercadoria:</strong> {order.mercadoria}
+                    <strong>Mercadoria:</strong> 
+                    <span className="block line-clamp-2 mt-0.5">{order.mercadoria}</span>
                   </div>
                 )}
-                </div>
+              </div>
             ))}
             {orders.length === 0 && (
               <div className="text-gray-500 text-center py-8">
