@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import React, { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 
 export default function DragDropCalendarBoard() {
@@ -12,7 +12,7 @@ export default function DragDropCalendarBoard() {
   const queryClient = useQueryClient();
 
   // Fetch ALL orders from your API
-  const { data: ordersData, isLoading } = useQuery({
+  const { data: ordersData, isLoading, refetch } = useQuery({
     queryKey: ['all-orders', language],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -32,28 +32,27 @@ export default function DragDropCalendarBoard() {
     staleTime: 30000
   });
 
-  // Mutation to update order scheduled date
-  const updateOrderMutation = useMutation({
-    mutationFn: async ({ orderId, dataPrevistaDeCarga }) => {
-      const res = await fetch(`/api/cargas/${orderId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ dataPrevistaDeCarga })
-      });
-      if (!res.ok) throw new Error('Failed to update order');
-      return res.json();
-    },
-    onSuccess: () => {
-      // Refetch orders to keep everything in sync
-      queryClient.invalidateQueries(['all-orders', language]);
-    }
-  });
-
   const allOrders = ordersData?.items || [];
 
-  // Filter out orders that are already scheduled in the calendar
+  // Load calendar from orders with scheduled dates
+  useEffect(() => {
+    if (allOrders.length > 0) {
+      const newCalendar = {};
+      allOrders.forEach(order => {
+        if (order.dataPrevistaDeCarga) {
+          const date = new Date(order.dataPrevistaDeCarga);
+          const dateKey = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+          if (!newCalendar[dateKey]) {
+            newCalendar[dateKey] = [];
+          }
+          newCalendar[dateKey].push(order);
+        }
+      });
+      setCalendar(newCalendar);
+    }
+  }, [allOrders]);
+
+  // Filter out orders that are already scheduled
   const getScheduledOrderIds = () => {
     const scheduledIds = new Set();
     Object.values(calendar).forEach((dayOrders: any) => {
@@ -85,7 +84,6 @@ export default function DragDropCalendarBoard() {
       2: 'bg-blue-500',      // AGENDADA
       8: 'bg-amber-700',     // A DEFINIR
       5: 'bg-green-500',     // REALIZADA
-      // Keep other estados with default colors
       3: 'bg-purple-500',
       4: 'bg-orange-500',
       6: 'bg-red-500',
@@ -106,32 +104,42 @@ export default function DragDropCalendarBoard() {
 
   const handleDrop = async (e, day) => {
     e.preventDefault();
-    if (draggedOrder) {
-      const dateKey = `${year}-${month + 1}-${day}`;
-      const scheduledDate = new Date(year, month, day);
+    if (!draggedOrder) return;
 
-      // Update local state immediately
-      setCalendar(prev => ({
-        ...prev,
-        [dateKey]: [...(prev[dateKey] || []), draggedOrder]
-      }));
+    const dateKey = `${year}-${month + 1}-${day}`;
+    const scheduledDate = new Date(year, month, day);
 
-      // Save to database
-      try {
-        await updateOrderMutation.mutateAsync({
-          orderId: draggedOrder.id,
-          dataPrevistaDeCarga: scheduledDate.toISOString()
-        });
-      } catch (error) {
-        console.error('Failed to update order:', error);
-        // Optionally revert the local change if the API call fails
-        setCalendar(prev => ({
-          ...prev,
-          [dateKey]: prev[dateKey].filter(o => o.id !== draggedOrder.id)
-        }));
+    // Update local state immediately
+    setCalendar(prev => ({
+      ...prev,
+      [dateKey]: [...(prev[dateKey] || []), draggedOrder]
+    }));
+
+    setDraggedOrder(null);
+
+    // Save to database
+    try {
+      const res = await fetch(`/api/cargas/${draggedOrder.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ dataPrevistaDeCarga: scheduledDate.toISOString() })
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to update order');
       }
 
-      setDraggedOrder(null);
+      // Refetch to sync with database
+      await refetch();
+    } catch (error) {
+      console.error('Failed to update order:', error);
+      // Revert local change on error
+      setCalendar(prev => ({
+        ...prev,
+        [dateKey]: prev[dateKey].filter(o => o.id !== draggedOrder.id)
+      }));
     }
   };
 
@@ -144,13 +152,23 @@ export default function DragDropCalendarBoard() {
 
     // Remove scheduled date from database
     try {
-      await updateOrderMutation.mutateAsync({
-        orderId: order.id,
-        dataPrevistaDeCarga: null
+      const res = await fetch(`/api/cargas/${order.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ dataPrevistaDeCarga: null })
       });
+
+      if (!res.ok) {
+        throw new Error('Failed to remove order schedule');
+      }
+
+      // Refetch to sync with database
+      await refetch();
     } catch (error) {
       console.error('Failed to remove order schedule:', error);
-      // Optionally revert the local change if the API call fails
+      // Revert local change on error
       setCalendar(prev => ({
         ...prev,
         [dateKey]: [...(prev[dateKey] || []), order]
@@ -231,8 +249,6 @@ export default function DragDropCalendarBoard() {
     <div className="flex h-screen bg-neutral-900 text-white p-4 gap-4">
       {/* Left Panel - Orders */}
       <div className="w-96 bg-neutral-800 rounded-lg border border-gray-700 overflow-y-auto">
-        
-        {/* Orders List */}
         <div className="p-4">
           <h2 className="text-lg font-bold mb-3 text-center">
             Encomendas Não Agendadas
