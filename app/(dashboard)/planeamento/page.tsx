@@ -1,24 +1,26 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 
 export default function DragDropCalendarBoard() {
   const language = 'pt';
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [calendar, setCalendar] = useState({});
+  
+  // O calendário inicia explicitamente vazio, ignorando o que vem da BD
+  const [calendar, setCalendar] = useState({}); 
   const [draggedOrder, setDraggedOrder] = useState(null);
   const queryClient = useQueryClient();
 
-  // Fetch ALL orders first to see what estadoId values exist
+  // 1. Fetch dos dados
   const { data: ordersData, isLoading, refetch } = useQuery({
     queryKey: ['all-orders', language],
     queryFn: async () => {
       const params = new URLSearchParams({
         dataInicio: new Date().getFullYear() + '-01-01',
         language: language,
-        estadoId: '1,2,3,4,5,6,7,8', // Fetch all to debug
+        estadoId: '1,2,3,4,5,6,7,8',
         countryId: '0',
         pageIndex: '0',
         pageSize: '500',
@@ -32,26 +34,25 @@ export default function DragDropCalendarBoard() {
     staleTime: 30000
   });
 
-  // Filter only Nova (1), A Definir (2), Agendada (3) on the frontend
-  const allOrders = (ordersData?.items || []).filter(order => 
-    order.estadoId === 1 || order.estadoId === 2 || order.estadoId === 3
-  );
-  
-  // Debug: log unique estadoId values to console
-  useEffect(() => {
-    if (ordersData?.items) {
-      const uniqueEstados = [...new Set(ordersData.items.map(o => o.estadoId))];
-      console.log('Available estadoId values:', uniqueEstados);
-      console.log('Total orders:', ordersData.items.length);
-      console.log('Filtered orders (1,2,3):', allOrders.length);
-    }
+  // 2. Filtramos apenas os estados desejados (Nova, A Definir, Agendada)
+  const relevantOrders = useMemo(() => {
+    return (ordersData?.items || []).filter(order => 
+      [1, 2, 3].includes(order.estadoId)
+    );
   }, [ordersData]);
 
-  // Load calendar from manual scheduling only (not from dataPrevistaDeCarga)
-  // Calendar state is managed separately from the fetched orders
-  
-  // Show ALL orders in left panel (don't filter by scheduled status)
-  const orders = allOrders;
+  // NOTA: Removi o useEffect que preenchia o calendário automaticamente.
+  // Agora o calendário obedece apenas à sua interação manual.
+
+  // 3. Painel Esquerdo: Mostra tudo o que NÃO está no calendário local (nesta sessão)
+  const ordersLeftPanel = useMemo(() => {
+    // Lista de IDs que você já arrastou para o calendário
+    const scheduledIds = Object.values(calendar).flat().map((o: any) => o.id);
+    
+    // Mostra a encomenda se ela for relevante E ainda não tiver sido arrastada
+    return relevantOrders.filter(order => !scheduledIds.includes(order.id));
+  }, [relevantOrders, calendar]);
+
 
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
@@ -66,7 +67,6 @@ export default function DragDropCalendarBoard() {
 
   const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentMonth);
 
-  // Updated colors to match the correct estado mapping
   const getOrderColor = (estadoId) => {
     const colors = {
       1: 'bg-yellow-400',    // NOVA
@@ -96,42 +96,36 @@ export default function DragDropCalendarBoard() {
     if (!draggedOrder) return;
 
     const dateKey = `${year}-${month + 1}-${day}`;
-    const scheduledDate = new Date(year, month, day);
+    // Define meio-dia para evitar problemas de fuso horário
+    const scheduledDate = new Date(year, month, day, 12, 0, 0);
 
-    // Check if order is already on this date
     const existingOrders = calendar[dateKey] || [];
     if (existingOrders.some(o => o.id === draggedOrder.id)) {
       setDraggedOrder(null);
-      return; // Already scheduled on this date
+      return; 
     }
 
-    // Update local state immediately
+    // Atualização Visual Imediata: Move da esquerda para o calendário
     setCalendar(prev => ({
       ...prev,
-      [dateKey]: [...(prev[dateKey] || []), draggedOrder]
+      [dateKey]: [...(prev[dateKey] || []), { ...draggedOrder, dataPrevistaDeCarga: scheduledDate.toISOString() }]
     }));
 
     setDraggedOrder(null);
 
-    // Save to database
+    // Salva na Base de Dados silenciosamente
     try {
-      const res = await fetch(`/api/cargas/${draggedOrder.id}`, {
+      await fetch(`/api/cargas/${draggedOrder.id}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dataPrevistaDeCarga: scheduledDate.toISOString() })
       });
-
-      if (!res.ok) {
-        throw new Error('Failed to update order');
-      }
-
-      // Refetch to sync with database
-      await refetch();
+      // Não fazemos refetch aqui para não "resetar" a vista, pois queremos manter o estado visual que você criou
     } catch (error) {
       console.error('Failed to update order:', error);
-      // Revert local change on error
+      alert("Erro ao guardar na base de dados!");
+      
+      // Reverter visualmente em caso de erro
       setCalendar(prev => ({
         ...prev,
         [dateKey]: prev[dateKey].filter(o => o.id !== draggedOrder.id)
@@ -140,31 +134,21 @@ export default function DragDropCalendarBoard() {
   };
 
   const handleRemoveFromCalendar = async (dateKey, order) => {
-    // Update local state immediately
-    setCalendar(prev => ({
-      ...prev,
-      [dateKey]: prev[dateKey].filter(o => o.id !== order.id)
-    }));
+    // Ao remover do calendário, ela volta automaticamente para a esquerda (devido ao filtro ordersLeftPanel)
+    setCalendar(prev => {
+      const newDayList = prev[dateKey].filter(o => o.id !== order.id);
+      return { ...prev, [dateKey]: newDayList };
+    });
 
-    // Remove scheduled date from database
     try {
-      const res = await fetch(`/api/cargas/${order.id}`, {
+      await fetch(`/api/cargas/${order.id}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dataPrevistaDeCarga: null })
       });
-
-      if (!res.ok) {
-        throw new Error('Failed to remove order schedule');
-      }
-
-      // Refetch to sync with database
-      await refetch();
     } catch (error) {
       console.error('Failed to remove order schedule:', error);
-      // Revert local change on error
+      // Reverter visualmente
       setCalendar(prev => ({
         ...prev,
         [dateKey]: [...(prev[dateKey] || []), order]
@@ -200,9 +184,9 @@ export default function DragDropCalendarBoard() {
           key={i}
           onDragOver={handleDragOver}
           onDrop={isValidDay ? (e) => handleDrop(e, day) : null}
-          className={`min-h-32 border border-gray-700 p-2 ${
+          className={`min-h-32 border border-gray-700 p-2 transition-colors ${
             isValidDay
-              ? 'bg-neutral-800 hover:bg-neutral-700 cursor-pointer'
+              ? 'bg-neutral-800 hover:bg-neutral-700'
               : 'bg-neutral-900'
           }`}
         >
@@ -213,13 +197,15 @@ export default function DragDropCalendarBoard() {
                 {ordersForDay.map(order => (
                   <div
                     key={order.id}
-                    className={`${getOrderColor(order.estadoId)} text-white text-xs p-2 rounded cursor-pointer hover:opacity-80 transition-opacity`}
+                    className={`${getOrderColor(order.estadoId)} text-white text-xs p-2 rounded cursor-pointer hover:brightness-110 transition-all shadow-sm group relative`}
                     onClick={() => handleRemoveFromCalendar(dateKey, order)}
-                    title="Clique para remover"
                   >
-                    <div className="font-bold">{order.encomendaPrimavera}</div>
+                    <div className="font-bold">{order.encomendaPrimavera || 'S/ Ref'}</div>
                     <div className="text-[10px] truncate">{order.cliente}</div>
-                    <div className="text-[10px] opacity-75">{order.estadoDesc}</div>
+                     {/* Tooltip on hover */}
+                     <div className="hidden group-hover:block absolute z-50 bottom-full left-0 bg-black text-white p-2 text-xs rounded w-40 mb-1 shadow-xl">
+                      Clique para devolver à lista
+                    </div>
                   </div>
                 ))}
               </div>
@@ -228,7 +214,6 @@ export default function DragDropCalendarBoard() {
         </div>
       );
     }
-
     return days;
   };
 
@@ -236,97 +221,103 @@ export default function DragDropCalendarBoard() {
     return (
       <div className="flex items-center justify-center h-screen bg-neutral-900">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-        <span className="ml-3 text-white">A carregar encomendas...</span>
+        <span className="ml-3 text-white">A carregar encomendas para planeamento...</span>
       </div>
     );
   }
 
   return (
     <div className="flex h-screen bg-neutral-900 text-white p-4 gap-4">
-      {/* Left Panel - Orders */}
-      <div className="w-96 bg-neutral-800 rounded-lg border border-gray-700 overflow-y-auto">
-        <div className="p-4">
-          <h2 className="text-lg font-bold mb-3 text-center">
-            Encomendas Não Agendadas
+      {/* Painel Esquerdo - A Planear */}
+      <div className="w-80 flex flex-col bg-neutral-800 rounded-lg border border-gray-700">
+        <div className="p-4 border-b border-gray-700 bg-neutral-800 rounded-t-lg z-10 shadow-md">
+          <h2 className="text-lg font-bold text-center text-blue-400">
+            A Planear
           </h2>
-          <div className="text-xs text-gray-400 mb-3 text-center">
-            {orders.length} encomenda(s) - Nova, Agendada, A Definir
+          <div className="text-xs text-gray-400 text-center mt-1">
+            {ordersLeftPanel.length} encomendas disponíveis
           </div>
-          <div className="space-y-2">
-            {orders.map(order => (
-              <div
-                key={order.id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, order)}
-                className={`${getOrderColor(order.estadoId)} p-3 rounded cursor-move hover:opacity-80 transition-opacity shadow-lg`}
-              >
-                <div className="text-xs opacity-90 mb-1">
-                  <strong>Cliente:</strong> {order.cliente}
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {ordersLeftPanel.map(order => (
+            <div
+              key={order.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, order)}
+              className={`${getOrderColor(order.estadoId)} p-3 rounded cursor-move hover:brightness-110 transition-all shadow-md border border-white/10 active:scale-95`}
+            >
+              <div className="flex justify-between items-start mb-1">
+                <span className="font-bold text-xs">{order.encomendaPrimavera || 'S/ Ref'}</span>
+                <span className="text-[9px] bg-black/30 px-1.5 py-0.5 rounded uppercase tracking-wider font-semibold">
+                  {order.estadoDesc || order.estadoId}
+                </span>
+              </div>
+              <div className="text-xs font-medium mb-1 truncate">
+                {order.cliente}
+              </div>
+              {order.mercadoria && (
+                <div className="text-[10px] opacity-80 line-clamp-2 italic bg-black/10 p-1 rounded">
+                  {order.mercadoria}
                 </div>
-                {order.encomendaDoCliente && (
-                  <div className="text-xs opacity-90 mb-1">
-                    <strong>Enc. Cliente:</strong> {order.encomendaDoCliente}
-                  </div>
-                )}
-                {order.projecto && (
-                  <div className="text-xs opacity-90 mb-1">
-                    <strong>Projecto:</strong> {order.projecto}
-                  </div>
-                )}
-                {order.mercadoria && (
-                  <div className="text-xs opacity-90 mb-1">
-                    <strong>Mercadoria:</strong> 
-                    <span className="block line-clamp-2 mt-0.5">{order.mercadoria}</span>
-                  </div>
-                )}
-              </div>
-            ))}
-            {orders.length === 0 && (
-              <div className="text-gray-500 text-center py-8">
-                Todas as encomendas foram agendadas
-              </div>
-            )}
-          </div>
+              )}
+               {/* Indicador visual se já tiver data na DB, mas está a ser replaneada */}
+               {order.dataPrevistaDeCarga && (
+                <div className="mt-2 text-[9px] flex items-center gap-1 opacity-75 border-t border-white/20 pt-1">
+                  <span>📅 Atual: {new Date(order.dataPrevistaDeCarga).toLocaleDateString()}</span>
+                </div>
+              )}
+            </div>
+          ))}
+          {ordersLeftPanel.length === 0 && (
+            <div className="text-gray-500 text-center py-10 text-sm px-6 border-2 border-dashed border-gray-700 rounded mx-2">
+              <p className="mb-2">Sem encomendas pendentes.</p>
+              <p className="text-xs">Se remover algo do calendário, aparecerá aqui.</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Right Panel - Calendar */}
-      <div className="flex-1 bg-neutral-800 rounded-lg p-4 border border-gray-700 overflow-auto">
-        {/* Month Header */}
-        <div className="flex items-center justify-between mb-4 sticky top-0 bg-neutral-800 pb-2 z-10">
+      {/* Painel Direito - Calendário */}
+      <div className="flex-1 bg-neutral-800 rounded-lg p-4 border border-gray-700 overflow-hidden flex flex-col">
+        {/* Cabeçalho Mês */}
+        <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => changeMonth(-1)}
-            className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 rounded transition-colors"
+            className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded text-sm font-medium transition-colors border border-gray-600"
           >
             ← Anterior
           </button>
-          <h2 className="text-2xl font-bold">
-            {monthNames[month]} {year}
-          </h2>
+          <div className="text-center">
+             <h2 className="text-xl font-bold capitalize">
+            {monthNames[month]} <span className="text-gray-400">{year}</span>
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">Arraste para definir o plano de montagem</p>
+          </div>
+         
           <button
             onClick={() => changeMonth(1)}
-            className="px-4 py-2 bg-neutral-700 hover:bg-neutral-600 rounded transition-colors"
+            className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded text-sm font-medium transition-colors border border-gray-600"
           >
             Próximo →
           </button>
         </div>
 
-        {/* Day Names */}
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {dayNames.map(day => (
-            <div key={day} className="text-center font-semibold text-gray-400 py-2 text-sm">
-              {day}
+        {/* Conteúdo Calendário */}
+        <div className="flex-1 overflow-y-auto">
+            {/* Dias Semana */}
+            <div className="grid grid-cols-7 gap-1 mb-1 sticky top-0 bg-neutral-800 py-2 z-10 shadow-sm">
+            {dayNames.map(day => (
+                <div key={day} className="text-center font-bold text-gray-500 text-xs uppercase tracking-wider">
+                {day}
+                </div>
+            ))}
             </div>
-          ))}
-        </div>
 
-        {/* Calendar Grid */}
-        <div className="grid grid-cols-7 gap-1">
-          {renderCalendarDays()}
-        </div>
-
-        <div className="mt-4 text-sm text-gray-400 text-center bg-neutral-800 py-2">
-          💡 Arraste encomendas da esquerda para os dias do calendário. Clique nas encomendas no calendário para removê-las.
+            {/* Grid */}
+            <div className="grid grid-cols-7 gap-1 pb-4">
+            {renderCalendarDays()}
+            </div>
         </div>
       </div>
     </div>
