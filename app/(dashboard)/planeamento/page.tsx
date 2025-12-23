@@ -11,14 +11,14 @@ export default function DragDropCalendarBoard() {
   const [draggedOrder, setDraggedOrder] = useState(null);
   const queryClient = useQueryClient();
 
-  // Fetch ALL orders from your API
+  // Fetch only orders with estadoId 1 (Nova), 2 (Agendada), or 8 (A Definir)
   const { data: ordersData, isLoading, refetch } = useQuery({
     queryKey: ['all-orders', language],
     queryFn: async () => {
       const params = new URLSearchParams({
         dataInicio: new Date().getFullYear() + '-01-01',
         language: language,
-        estadoId: '1,2,3,4,5,6,7,8',
+        estadoId: '1,2,8', // Changed from '1,2,3,4,5,6,7,8' to only Nova, Agendada, A Definir
         countryId: '0',
         pageIndex: '0',
         pageSize: '500',
@@ -254,7 +254,7 @@ export default function DragDropCalendarBoard() {
             Encomendas Não Agendadas
           </h2>
           <div className="text-xs text-gray-400 mb-3 text-center">
-            {orders.length} encomenda(s)
+            {orders.length} encomenda(s) - Nova, Agendada, A Definir
           </div>
           <div className="space-y-2">
             {orders.map(order => (
