@@ -11,14 +11,14 @@ export default function DragDropCalendarBoard() {
   const [draggedOrder, setDraggedOrder] = useState(null);
   const queryClient = useQueryClient();
 
-  // Fetch only orders with estadoId 1 (Nova), 2 (A Definir), or 3 (Agendada)
+  // Fetch ALL orders first to see what estadoId values exist
   const { data: ordersData, isLoading, refetch } = useQuery({
     queryKey: ['all-orders', language],
     queryFn: async () => {
       const params = new URLSearchParams({
         dataInicio: new Date().getFullYear() + '-01-01',
         language: language,
-        estadoId: '1,2,3', // Only Nova, A Definir, Agendada
+        estadoId: '1,2,3,4,5,6,7,8', // Fetch all to debug
         countryId: '0',
         pageIndex: '0',
         pageSize: '500',
@@ -32,37 +32,26 @@ export default function DragDropCalendarBoard() {
     staleTime: 30000
   });
 
-  const allOrders = ordersData?.items || [];
-
-  // Load calendar from orders with scheduled dates
+  // Filter only Nova (1), A Definir (2), Agendada (3) on the frontend
+  const allOrders = (ordersData?.items || []).filter(order => 
+    order.estadoId === 1 || order.estadoId === 2 || order.estadoId === 3
+  );
+  
+  // Debug: log unique estadoId values to console
   useEffect(() => {
-    if (allOrders.length > 0) {
-      const newCalendar = {};
-      allOrders.forEach(order => {
-        if (order.dataPrevistaDeCarga) {
-          const date = new Date(order.dataPrevistaDeCarga);
-          const dateKey = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-          if (!newCalendar[dateKey]) {
-            newCalendar[dateKey] = [];
-          }
-          newCalendar[dateKey].push(order);
-        }
-      });
-      setCalendar(newCalendar);
+    if (ordersData?.items) {
+      const uniqueEstados = [...new Set(ordersData.items.map(o => o.estadoId))];
+      console.log('Available estadoId values:', uniqueEstados);
+      console.log('Total orders:', ordersData.items.length);
+      console.log('Filtered orders (1,2,3):', allOrders.length);
     }
-  }, [allOrders]);
+  }, [ordersData]);
 
-  // Filter out orders that are already scheduled
-  const getScheduledOrderIds = () => {
-    const scheduledIds = new Set();
-    Object.values(calendar).forEach((dayOrders: any) => {
-      dayOrders.forEach(order => scheduledIds.add(order.id));
-    });
-    return scheduledIds;
-  };
-
-  const scheduledIds = getScheduledOrderIds();
-  const orders = allOrders.filter(order => !scheduledIds.has(order.id));
+  // Load calendar from manual scheduling only (not from dataPrevistaDeCarga)
+  // Calendar state is managed separately from the fetched orders
+  
+  // Show ALL orders in left panel (don't filter by scheduled status)
+  const orders = allOrders;
 
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
@@ -108,6 +97,13 @@ export default function DragDropCalendarBoard() {
 
     const dateKey = `${year}-${month + 1}-${day}`;
     const scheduledDate = new Date(year, month, day);
+
+    // Check if order is already on this date
+    const existingOrders = calendar[dateKey] || [];
+    if (existingOrders.some(o => o.id === draggedOrder.id)) {
+      setDraggedOrder(null);
+      return; // Already scheduled on this date
+    }
 
     // Update local state immediately
     setCalendar(prev => ({
