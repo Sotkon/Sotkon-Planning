@@ -11,14 +11,14 @@ export default function DragDropCalendarBoard() {
   const [draggedOrder, setDraggedOrder] = useState(null);
   const queryClient = useQueryClient();
 
-  // Fetch only orders with estadoId 1 (Nova), 2 (Agendada), or 8 (A Definir)
+  // Fetch only orders with estadoId 1 (Nova), 2 (A Definir), or 3 (Agendada)
   const { data: ordersData, isLoading, refetch } = useQuery({
     queryKey: ['all-orders', language],
     queryFn: async () => {
       const params = new URLSearchParams({
         dataInicio: new Date().getFullYear() + '-01-01',
         language: language,
-        estadoId: '1,2,8', // Changed from '1,2,3,4,5,6,7,8' to only Nova, Agendada, A Definir
+        estadoId: '1,2,3', // Only Nova, A Definir, Agendada
         countryId: '0',
         pageIndex: '0',
         pageSize: '500',
@@ -77,17 +77,17 @@ export default function DragDropCalendarBoard() {
 
   const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentMonth);
 
-  // Updated colors to match LegendaEstados.tsx
+  // Updated colors to match the correct estado mapping
   const getOrderColor = (estadoId) => {
     const colors = {
       1: 'bg-yellow-400',    // NOVA
-      2: 'bg-blue-500',      // AGENDADA
-      8: 'bg-amber-700',     // A DEFINIR
-      5: 'bg-green-500',     // REALIZADA
-      3: 'bg-purple-500',
-      4: 'bg-orange-500',
-      6: 'bg-red-500',
-      7: 'bg-pink-500'
+      2: 'bg-amber-700',     // A DEFINIR
+      3: 'bg-blue-500',      // AGENDADA
+      4: 'bg-green-500',     // REALIZADA
+      5: 'bg-purple-500',
+      6: 'bg-orange-500',
+      7: 'bg-red-500',
+      8: 'bg-pink-500'
     };
     return colors[estadoId] || 'bg-gray-500';
   };
