@@ -147,7 +147,7 @@ export default function Navbar() {
                       Novo Registo de Montagem
                     </Link>
                     <Link
-                      href="/autocontrolo/lista"
+                      href="/planeamento/gantt"
                       className="block px-4 py-2 hover:bg-neutral-600 text-gray-100 transition"
                       onClick={closeDropdown}
                     >
