@@ -1,14 +1,14 @@
 // app/api/cargas/[id]/gantt/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@vercel/postgres';
+import prisma from '@/lib/prisma'; // Adjust this import to match your database setup
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const orderId = params.id;
+    const orderId = parseInt(params.id);
     const body = await request.json();
     
     const { dataPrevistaDeCarga } = body;
@@ -21,31 +21,32 @@ export async function PUT(
       );
     }
 
-    // Update the order with the load date
-    const result = await sql`
-      UPDATE cargas 
-      SET 
-        data_prevista_de_carga = ${dataPrevistaDeCarga}
-      WHERE id = ${orderId}
-      RETURNING *
-    `;
+    // Update the order with the load date using Prisma
+    const result = await prisma.cargas.update({
+      where: { id: orderId },
+      data: {
+        dataPrevistaDeCarga: new Date(dataPrevistaDeCarga)
+      }
+    });
 
-    if (result.rowCount === 0) {
+    return NextResponse.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error: any) {
+    console.error('Error updating gantt data:', error);
+    
+    // Handle record not found
+    if (error.code === 'P2025') {
       return NextResponse.json(
         { error: 'Order not found' },
         { status: 404 }
       );
     }
-
-    return NextResponse.json({
-      success: true,
-      data: result.rows[0]
-    });
-
-  } catch (error) {
-    console.error('Error updating gantt data:', error);
+    
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error.message },
       { status: 500 }
     );
   }
@@ -56,17 +57,17 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const orderId = params.id;
+    const orderId = parseInt(params.id);
 
-    const result = await sql`
-      SELECT 
-        id,
-        data_prevista_de_carga
-      FROM cargas
-      WHERE id = ${orderId}
-    `;
+    const result = await prisma.cargas.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        dataPrevistaDeCarga: true
+      }
+    });
 
-    if (result.rowCount === 0) {
+    if (!result) {
       return NextResponse.json(
         { error: 'Order not found' },
         { status: 404 }
@@ -75,13 +76,13 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: result.rows[0]
+      data: result
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching gantt data:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error.message },
       { status: 500 }
     );
   }
