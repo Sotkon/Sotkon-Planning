@@ -1,4 +1,4 @@
-name: Deploy to Production
+name: Deploy Static Web App
 
 on:
   push:
@@ -6,193 +6,17 @@ on:
       - main
 
 jobs:
-  deploy:
-    runs-on: self-hosted
-    
+  build_and_deploy:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+
+      - name: Build and Deploy
+        uses: Azure/static-web-apps-deploy@v1
         with:
-          node-version: '20'
-          
-      - name: Install dependencies
-        run: npm ci
-        
-      - name: Generate Prisma Client
-        run: npx prisma generate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      
-      # Clean Next.js cache before building
-      - name: Clean build cache
-        run: |
-          Write-Output "🧹 Cleaning Next.js build cache..."
-          if (Test-Path ".next") {
-            Remove-Item -Path ".next" -Recurse -Force -ErrorAction SilentlyContinue
-            Write-Output "✅ Removed .next cache"
-          }
-          Write-Output "🧹 Cleaning npm cache..."
-          npm cache clean --force
-          Write-Output "✅ Cache cleaning completed"
-        continue-on-error: false
-        
-      - name: Build project
-        run: npm run build
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL }}
-          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
-          NODE_ENV: production
-          
-      - name: Stop service and deploy build
-        run: |
-          Write-Output "============================================"
-          Write-Output "STARTING DEPLOYMENT PROCESS"
-          Write-Output "============================================"
-          Write-Output ""
-          
-          Write-Output "Stopping service..."
-          C:\Apps\nssm.exe stop PlanningApp
-          Start-Sleep -Seconds 20
-          
-          $status = C:\Apps\nssm.exe status PlanningApp
-          Write-Output "Service status: $status"
-          Write-Output ""
-          
-          Write-Output "Checking for lingering Node.js processes..."
-          $nodeProcesses = Get-Process -Name "node" -ErrorAction SilentlyContinue
-          if ($nodeProcesses) {
-            Write-Output "Found $($nodeProcesses.Count) Node.js process(es), force stopping..."
-            Stop-Process -Name "node" -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 5
-            Write-Output "Processes killed"
-          } else {
-            Write-Output "No lingering processes"
-          }
-          Write-Output ""
-          
-          Write-Output "Waiting for file handles to release..."
-          Start-Sleep -Seconds 15
-          Write-Output "Wait complete"
-          Write-Output ""
-          
-          Write-Output "Verifying source build..."
-          if (Test-Path "$env:GITHUB_WORKSPACE\.next\standalone") {
-            Write-Output "Source build found at: $env:GITHUB_WORKSPACE\.next\standalone"
-            
-            $sourceBuildId = Get-Content "$env:GITHUB_WORKSPACE\.next\standalone\.next\BUILD_ID" -ErrorAction SilentlyContinue
-            Write-Output "Source BUILD_ID: $sourceBuildId"
-            
-            $navbarCheck = Select-String -Path "$env:GITHUB_WORKSPACE\components\Navbar.tsx" -Pattern "Encomendas de Cliente" -ErrorAction SilentlyContinue
-            if ($navbarCheck) {
-              Write-Output "'Encomendas de Cliente' found in source Navbar"
-            } else {
-              Write-Output "WARNING: 'Encomendas de Cliente' NOT found in source Navbar"
-            }
-          } else {
-            Write-Error "Source build not found!"
-            exit 1
-          }
-          Write-Output ""
-          
-          Write-Output "Deploying to production..."
-          Write-Output ""
-          
-          # Take ownership and grant permissions (force access)
-          if (Test-Path "C:\Apps\Sotkon-Planning\.next\standalone") {
-            Write-Output "Taking ownership of deployment directory..."
-            takeown /F "C:\Apps\Sotkon-Planning\.next\standalone" /R /D Y 2>&1 | Out-Null
-            icacls "C:\Apps\Sotkon-Planning\.next\standalone" /grant "Everyone:(OI)(CI)F" /T /Q 2>&1 | Out-Null
-            Write-Output "Ownership granted"
-          }
-          
-          if (-not (Test-Path "C:\Apps\Sotkon-Planning\.next")) {
-            New-Item -Path "C:\Apps\Sotkon-Planning\.next" -ItemType Directory -Force | Out-Null
-          }
-          
-          Write-Output "Deploying standalone build (mirroring)..."
-          robocopy "$env:GITHUB_WORKSPACE\.next\standalone" "C:\Apps\Sotkon-Planning\.next\standalone" /MIR /R:3 /W:5
-          
-          if ($LASTEXITCODE -gt 7) {
-            Write-Error "Robocopy standalone failed with exit code: $LASTEXITCODE"
-            exit 1
-          }
-          Write-Output "Standalone copied"
-          Write-Output ""
-          
-          if (Test-Path "$env:GITHUB_WORKSPACE\public") {
-            Write-Output "Copying public folder..."
-            robocopy "$env:GITHUB_WORKSPACE\public" "C:\Apps\Sotkon-Planning\.next\standalone\public" /MIR /R:3 /W:5
-            Write-Output "Public copied"
-          }
-          Write-Output ""
-          
-          if (Test-Path "$env:GITHUB_WORKSPACE\.next\static") {
-            Write-Output "Copying static folder..."
-            robocopy "$env:GITHUB_WORKSPACE\.next\static" "C:\Apps\Sotkon-Planning\.next\standalone\.next\static" /MIR /R:3 /W:5
-            Write-Output "Static copied"
-          }
-          Write-Output ""
-          
-          Write-Output "Verifying deployment..."
-          $deployedBuildId = Get-Content "C:\Apps\Sotkon-Planning\.next\standalone\.next\BUILD_ID" -ErrorAction SilentlyContinue
-          Write-Output "Deployed BUILD_ID: $deployedBuildId"
-          
-          if ($deployedBuildId -eq $sourceBuildId) {
-            Write-Output "BUILD_IDs match!"
-          } else {
-            Write-Error "BUILD_IDs don't match! Source: $sourceBuildId, Deployed: $deployedBuildId"
-            exit 1
-          }
-          
-          $deployedFiles = Get-ChildItem "C:\Apps\Sotkon-Planning\.next\standalone" -Recurse | Measure-Object
-          Write-Output "Deployed $($deployedFiles.Count) files"
-          Write-Output ""
-          
-          Write-Output "============================================"
-          Write-Output "DEPLOYMENT COMPLETE!"
-          Write-Output "BUILD_ID: $deployedBuildId"
-          Write-Output "============================================"
-          
-          # Explicitly exit with success code
-          exit 0
-        continue-on-error: false
-          
-      - name: Start service
-        run: C:\Apps\nssm.exe start PlanningApp
-        
-      - name: Wait for service to start
-        run: Start-Sleep -Seconds 15
-        
-      - name: Verify service is running
-        run: |
-          $maxAttempts = 6
-          $attempt = 0
-          $running = $false
-          
-          while ($attempt -lt $maxAttempts -and -not $running) {
-            $attempt++
-            Write-Output "Checking service status (attempt $attempt/$maxAttempts)..."
-            
-            $status = C:\Apps\nssm.exe status PlanningApp
-            Write-Output "Status: $status"
-            
-            if ($status -eq "SERVICE_RUNNING") {
-              $running = $true
-              $buildId = Get-Content "C:\Apps\Sotkon-Planning\.next\standalone\.next\BUILD_ID"
-              Write-Output "✅ Deploy successful! Service is running with BUILD_ID: $buildId"
-            } else {
-              if ($attempt -lt $maxAttempts) {
-                Write-Output "Service not ready yet, waiting 5 seconds..."
-                Start-Sleep -Seconds 5
-              }
-            }
-          }
-          
-          if (-not $running) {
-            Write-Error "Service failed to start after $maxAttempts attempts!"
-            exit 1
-          }
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "/"        # pasta do frontend
+          api_location: ""         # se não tiveres API
+          output_location: "dist"  # ou build, wwwroot, etc
