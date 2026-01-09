@@ -26,6 +26,9 @@ model tblPlanningCargas {
   transportador              String?   @db.NVarChar(255)
   custos_de_transporte       Decimal?  @db.Decimal(18, 2)
   prazoDeEntregaPrevisto     String?   @db.NVarChar(50)
+  dataInicio                 DateTime? @db.Date
+  dataFim                    DateTime? @db.Date
+  duracao                    Int?
 }
 
 model tblPlanningCargaServicos {
@@ -58,14 +61,24 @@ model tblPlanningServicosTipos {
 model users {
   id           Int       @id(map: "PK__users__3213E83FC0E99C11") @default(autoincrement())
   username     String    @unique(map: "UQ__users__F3DBC57239B19AEF") @db.NVarChar(50)
-  passwordHash String    @db.NVarChar(255)
+  passwordHash String    @db.VarChar(255)
   name         String    @db.NVarChar(100)
   email        String?   @db.NVarChar(100)
   role         String?   @default("user", map: "DF__users__role__37A5467C") @db.NVarChar(20)
   active       Boolean?  @default(true, map: "DF__users__active__38996AB5")
-  createdAt    DateTime? @default(now(), map: "DF__users__createdAt__398D8EEE") @db.DateTime
+  createdAt    DateTime? @default(now(), map: "DF__users__createdAt__7C4F7684") @db.DateTime
   lastLogin    DateTime? @db.DateTime
 
   @@index([active], map: "IX_users_active")
   @@index([username], map: "IX_users_username")
+}
+
+model sysdiagrams {
+  name         String @db.NVarChar(128)
+  principal_id Int
+  diagram_id   Int    @id(map: "PK__sysdiagr__C2B05B6115A05931") @default(autoincrement())
+  version      Int?
+  definition   Bytes?
+
+  @@unique([principal_id, name], map: "UK_principal_name")
 }
