@@ -20,22 +20,23 @@ jobs:
           submodules: true
           lfs: false
 
-      # Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      # Install dependencies
       - name: Install dependencies
         run: npm ci
 
-      # Generate Prisma Client
       - name: Generate Prisma Client
         run: npx prisma generate
 
-      # Build and Deploy to Azure Static Web Apps
-      - name: Build and Deploy
+      - name: Build Next.js
+        run: npm run build
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
@@ -45,6 +46,7 @@ jobs:
           app_location: "/"
           api_location: ""
           output_location: ".next"
+          skip_app_build: true
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
