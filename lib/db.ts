@@ -7,22 +7,50 @@ const config: sql.config = {
   password: 'InternalTool@2026',
   options: {
     encrypt: true,
-    trustServerCertificate: true,
+    trustServerCertificate: false,
+    enableArithAbort: true,
   },
   pool: {
     max: 10,
     min: 0,
     idleTimeoutMillis: 30000
-  }
+  },
+  connectionTimeout: 30000,
+  requestTimeout: 30000,
 };
 
 let pool: sql.ConnectionPool | null = null;
+let connecting: Promise<sql.ConnectionPool> | null = null;
 
-export async function getDb() {
-  if (!pool) {
-    pool = await sql.connect(config);
+export async function getDb(): Promise<sql.ConnectionPool> {
+  // Se já existe uma conexão ativa, retorna
+  if (pool && pool.connected) {
+    return pool;
   }
-  return pool;
+
+  // Se já está conectando, aguarda a conexão
+  if (connecting) {
+    return connecting;
+  }
+
+  // Inicia nova conexão
+  connecting = (async () => {
+    try {
+      console.log('🔌 Connecting to SQL Server...');
+      pool = new sql.ConnectionPool(config);
+      await pool.connect();
+      console.log('✅ Connected to SQL Server');
+      return pool;
+    } catch (error) {
+      console.error('❌ Failed to connect to SQL Server:', error);
+      pool = null;
+      throw error;
+    } finally {
+      connecting = null;
+    }
+  })();
+
+  return connecting;
 }
 
 // Helper para queries simples
