@@ -2,10 +2,10 @@
   "name": "planning-app",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
+   "scripts": {
     "dev": "next dev",
     "prebuild": "prisma generate",
-    "build": "next build",
+    "build": "next build && node scripts/copy-prisma.js",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate"
