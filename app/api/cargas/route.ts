@@ -20,24 +20,20 @@ export async function GET(request: NextRequest) {
     const dataInicioDate = new Date(year, month - 1, day);
 
     const pool = await getDb();
-    const dbRequest = pool.request(); 
 
-    // Construir query SQL
+    // Construir condições WHERE
     let whereConditions = ['dataPrevistaDeCarga IS NOT NULL', 'dataPrevistaDeCarga >= @dataInicio'];
-    dbRequest.input('dataInicio', sql.DateTime, dataInicioDate);
-
+    
     // Filtro estado
     if (estadoId === 0) {
       whereConditions.push('estadoId <> 4');
     } else if (estadoId > 0) {
       whereConditions.push('estadoId = @estadoId');
-      dbRequest.input('estadoId', sql.Int, estadoId);
     }
 
     // Filtro país
     if (countryId > 0) {
       whereConditions.push('countryId = @countryId');
-      dbRequest.input('countryId', sql.Int, countryId);
     }
 
     // Filtro texto
@@ -48,18 +44,17 @@ export async function GET(request: NextRequest) {
         projecto LIKE @textToSearch OR 
         localizacao LIKE @textToSearch
       )`);
-      dbRequest.input('textToSearch', sql.NVarChar, `%${textToSearch}%`);
     }
 
     const whereClause = whereConditions.join(' AND ');
 
-    // Query principal
+    // Query principal COM PARÂMETROS
     const offset = pageIndex * pageSize;
     const queryText = `
       SELECT * FROM tblPlanningCargas
       WHERE ${whereClause}
       ORDER BY dataPrevistaDeCarga ASC
-      OFFSET ${offset} ROWS FETCH NEXT ${pageSize} ROWS ONLY
+      OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
     `;
 
     const countQuery = `
@@ -67,11 +62,28 @@ export async function GET(request: NextRequest) {
       WHERE ${whereClause}
     `;
 
-    const [cargas, countResult] = await Promise.all([
-      dbRequest.query(queryText),
-      pool.request().query(countQuery)
+    // CRIAR REQUEST PARA CADA QUERY
+    const dataRequest = pool.request();
+    dataRequest.input('dataInicio', sql.DateTime, dataInicioDate);
+    dataRequest.input('offset', sql.Int, offset);
+    dataRequest.input('pageSize', sql.Int, pageSize);
+    if (estadoId > 0) dataRequest.input('estadoId', sql.Int, estadoId);
+    if (countryId > 0) dataRequest.input('countryId', sql.Int, countryId);
+    if (textToSearch) dataRequest.input('textToSearch', sql.NVarChar, `%${textToSearch}%`);
+
+    const countRequest = pool.request();
+    countRequest.input('dataInicio', sql.DateTime, dataInicioDate);
+    if (estadoId > 0) countRequest.input('estadoId', sql.Int, estadoId);
+    if (countryId > 0) countRequest.input('countryId', sql.Int, countryId);
+    if (textToSearch) countRequest.input('textToSearch', sql.NVarChar, `%${textToSearch}%`);
+
+    // Executar queries
+    const [cargasResult, countResult] = await Promise.all([
+      dataRequest.query(queryText),
+      countRequest.query(countQuery)
     ]);
 
+    const cargas = cargasResult.recordset;
     const totalCount = countResult.recordset[0].total;
 
     // Mapear estados
@@ -82,12 +94,13 @@ export async function GET(request: NextRequest) {
       4: { pt: 'REALIZADA', en: 'COMPLETED', fr: 'RÉALISÉ', es: 'REALIZADA' }
     };
 
+    // Mapear países
     const paisesMap: Record<number, string> = {
       1: 'PT', 2: 'SP', 3: 'FR', 4: 'INT'
     };
 
     // Formatar dados
-    const items = cargas.recordset.map((carga: any) => ({
+    const items = cargas.map((carga: any) => ({
       id: carga.id,
       cliente: carga.cliente || '',
       paisId: carga.countryId,
