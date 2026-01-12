@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getDb } from '@/lib/db';
 import ExcelJS from 'exceljs';
+import sql from 'mssql';
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    
+
     // Parâmetros (mesmos da listagem)
     const dataInicio = searchParams.get('dataInicio') || new Date().toISOString().split('T')[0];
     const language = searchParams.get('language') || 'pt';
@@ -17,41 +18,49 @@ export async function GET(request: NextRequest) {
     const [year, month, day] = dataInicio.split('-').map(Number);
     const dataInicioDate = new Date(year, month - 1, day);
 
-    // Query base (mesma da listagem)
-    let whereClause: any = {
-      dataPrevistaDeCarga: {
-        not: null,
-        gte: dataInicioDate
-      }
-    };
+    const pool = await getDb();
+    let queryRequest = pool.request();
+
+    // Construir query SQL
+    let whereConditions = ['dataPrevistaDeCarga IS NOT NULL', 'dataPrevistaDeCarga >= @dataInicio'];
+    queryRequest.input('dataInicio', sql.DateTime, dataInicioDate);
 
     // Filtro estado
     if (estadoId === 0) {
-      whereClause.estadoId = { not: 4 };
+      whereConditions.push('estadoId <> 4');
     } else if (estadoId > 0) {
-      whereClause.estadoId = estadoId;
+      whereConditions.push('estadoId = @estadoId');
+      queryRequest.input('estadoId', sql.Int, estadoId);
     }
 
     // Filtro país
     if (countryId > 0) {
-      whereClause.countryId = countryId;
+      whereConditions.push('countryId = @countryId');
+      queryRequest.input('countryId', sql.Int, countryId);
     }
 
     // Filtro texto
     if (textToSearch) {
-      whereClause.OR = [
-        { cliente: { contains: textToSearch } },
-        { encomendaDoCliente: { contains: textToSearch } },
-        { projecto: { contains: textToSearch } },
-        { localizacao: { contains: textToSearch } }
-      ];
+      whereConditions.push(`(
+        cliente LIKE @textToSearch OR 
+        encomendaDoCliente LIKE @textToSearch OR 
+        projecto LIKE @textToSearch OR 
+        localizacao LIKE @textToSearch
+      )`);
+      queryRequest.input('textToSearch', sql.NVarChar, `%${textToSearch}%`);
     }
 
+    const whereClause = whereConditions.join(' AND ');
+
     // Buscar TODAS as cargas (sem paginação)
-    const cargas = await prisma.tblPlanningCargas.findMany({
-      where: whereClause,
-      orderBy: { dataPrevistaDeCarga: 'asc' }
-    });
+    const queryText = `
+      SELECT * FROM tblPlanningCargas
+      WHERE ${whereClause}
+      ORDER BY dataPrevistaDeCarga ASC
+    `;
+
+    const result = await queryRequest.query(queryText);
+    const cargas = result.recordset;
 
     // Mapear estados
     const estadosMap: Record<number, string> = {
@@ -102,33 +111,35 @@ export async function GET(request: NextRequest) {
 
     // Buscar serviços para cada carga e adicionar linhas
     for (const carga of cargas) {
-  // Buscar serviços da carga
-  const servicosDaCarga = await prisma.tblPlanningCargaServicos.findMany({
-    where: { planningCargaId: carga.id }
-  });
+      // Buscar serviços da carga
+      const servicosResult = await pool.request()
+        .input('planningCargaId', sql.Int, carga.id)
+        .query('SELECT servicoId FROM tblPlanningCargaServicos WHERE planningCargaId = @planningCargaId');
 
-  // Buscar descrições dos serviços
-  let servicosStr = '';
-  if (servicosDaCarga.length > 0) {
-    // ✅ CORRIGIDO - Filtrar nulls
-    const servicosIds = servicosDaCarga
-      .map(s => s.servicoId)
-      .filter((id): id is number => id !== null);
-    
-    if (servicosIds.length > 0) {
-      const servicos = await prisma.tblPlanningServicosTipos.findMany({
-        where: { id: { in: servicosIds } }
-      });
-      
-      servicosStr = servicos
-        .map(s => language === 'pt' ? s.descPT : 
-                  language === 'en' ? s.descEN : 
-                  language === 'fr' ? s.descFR : 
-                  language === 'es' ? s.descES : s.descPT)
-        .filter(Boolean)
-        .join(', ');
-    }
-  }
+      const servicosDaCarga = servicosResult.recordset;
+
+      // Buscar descrições dos serviços
+      let servicosStr = '';
+      if (servicosDaCarga.length > 0) {
+        const servicosIds = servicosDaCarga
+          .map((s: any) => s.servicoId)
+          .filter((id: any) => id !== null);
+
+        if (servicosIds.length > 0) {
+          const servicosResult = await pool.request()
+            .query(`SELECT * FROM tblPlanningServicosTipos WHERE id IN (${servicosIds.join(',')})`);
+
+          const servicos = servicosResult.recordset;
+
+          servicosStr = servicos
+            .map((s: any) => language === 'pt' ? s.descPT :
+                      language === 'en' ? s.descEN :
+                      language === 'fr' ? s.descFR :
+                      language === 'es' ? s.descES : s.descPT)
+            .filter(Boolean)
+            .join(', ');
+        }
+      }
 
       // Formatar data
       const dataFormatada = carga.dataPrevistaDeCarga
@@ -161,7 +172,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Aplicar bordas a todas as células
-    worksheet.eachRow((row, rowNumber) => {
+    worksheet.eachRow((row) => {
       row.eachCell((cell) => {
         cell.border = {
           top: { style: 'thin' },

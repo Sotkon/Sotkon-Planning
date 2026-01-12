@@ -1,29 +1,37 @@
 // app/(dashboard)/dashboard/page.tsx
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { getDb } from '@/lib/db'
+import sql from 'mssql'
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
   const currentYear = new Date().getFullYear()
-  
+  const pool = await getDb()
+
   // Buscar estatísticas
-  const totalCargas = await prisma.tblPlanningCargas.count({
-  where: { 
-    estadoId: -1,
-    dataPrevistaDeCarga: {
-      gte: new Date(`${currentYear}-01-01`),
-      lte: new Date(`${currentYear}-12-31`)
-     }
-    }
-})
-  const cargasRecentes = await prisma.tblPlanningCargas.count({
-    where: {
-      dateCreated: {
-        gte: new Date(new Date().setDate(new Date().getDate() - 30))
-      }
-    }
-  })
+  const totalCargasResult = await pool.request()
+    .input('startDate', sql.DateTime, new Date(`${currentYear}-01-01`))
+    .input('endDate', sql.DateTime, new Date(`${currentYear}-12-31`))
+    .query(`
+      SELECT COUNT(*) as total FROM tblPlanningCargas
+      WHERE dataPrevistaDeCarga >= @startDate
+        AND dataPrevistaDeCarga <= @endDate
+    `);
+  
+  const totalCargas = totalCargasResult.recordset[0]?.total || 0;
+
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const cargasRecentesResult = await pool.request()
+    .input('thirtyDaysAgo', sql.DateTime, thirtyDaysAgo)
+    .query(`
+      SELECT COUNT(*) as total FROM tblPlanningCargas
+      WHERE dateCreated >= @thirtyDaysAgo
+    `);
+  
+  const cargasRecentes = cargasRecentesResult.recordset[0]?.total || 0;
 
   return (
     <div>
@@ -36,7 +44,7 @@ export default async function DashboardPage() {
         <div className="bg-neutral-800 border border-gray-100 rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-6  00 text-sm">Total de Encomendas de Cliente</p>
+              <p className="text-gray-600 text-sm">Total de Encomendas de Cliente</p>
               <p className="text-3xl font-bold text-gray-100">{totalCargas}</p>
             </div>
             <div className="bg-blue-100 p-4 rounded-full">

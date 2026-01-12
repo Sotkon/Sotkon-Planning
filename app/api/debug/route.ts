@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import sql from 'mssql';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,11 +15,11 @@ export async function GET() {
       databaseUrlPrefix: process.env.DATABASE_URL?.substring(0, 20) || 'NOT_FOUND',
       nodeEnv: process.env.NODE_ENV,
     },
-    prisma: null as any,
+    mssql: null as any,
     error: null as any
   };
 
-  console.log('🔑 [DEBUG] Environment variables check:');
+  console.log('🔒 [DEBUG] Environment variables check:');
   console.log('  - DATABASE_URL exists:', checks.env.hasDatabaseUrl);
   console.log('  - DATABASE_URL prefix:', checks.env.databaseUrlPrefix);
   console.log('  - NEXTAUTH_SECRET exists:', checks.env.hasNextAuthSecret);
@@ -43,31 +43,29 @@ export async function GET() {
   }
 
   try {
-    console.log('🔌 [DEBUG] Attempting to create Prisma Client...');
-    const prisma = new PrismaClient({
-      log: ['query', 'error', 'warn'],
-    });
-    
-    console.log('✅ [DEBUG] Prisma Client created successfully');
+    console.log('🔌 [DEBUG] Attempting to connect to SQL Server...');
+    const pool = await sql.connect(process.env.DATABASE_URL!);
+
+    console.log('✅ [DEBUG] Connected successfully');
     console.log('🔄 [DEBUG] Executing test query...');
-    
-    const result = await prisma.$queryRaw`SELECT 1 as test`;
-    
+
+    const result = await pool.request().query('SELECT 1 as test');
+
     console.log('✅ [DEBUG] Query executed successfully!');
-    console.log('📊 [DEBUG] Query result:', JSON.stringify(result));
-    
-    checks.prisma = { status: "connected", result };
-    
-    console.log('🔌 [DEBUG] Disconnecting from database...');
-    await prisma.$disconnect();
-    console.log('✅ [DEBUG] Disconnected successfully');
-    
+    console.log('📊 [DEBUG] Query result:', JSON.stringify(result.recordset));
+
+    checks.mssql = { status: "connected", result: result.recordset };
+
+    console.log('🔌 [DEBUG] Closing connection...');
+    await pool.close();
+    console.log('✅ [DEBUG] Connection closed successfully');
+
   } catch (error) {
-    console.error('❌ [DEBUG] Error occurred during Prisma operations:');
+    console.error('❌ [DEBUG] Error occurred during SQL Server operations:');
     console.error('  - Error name:', error instanceof Error ? error.name : 'Unknown');
     console.error('  - Error message:', error instanceof Error ? error.message : String(error));
     console.error('  - Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-    
+
     checks.error = {
       message: error instanceof Error ? error.message : String(error),
       name: error instanceof Error ? error.name : "Unknown",
@@ -77,7 +75,7 @@ export async function GET() {
 
   console.log('📤 [DEBUG] Returning final response');
   console.log('📋 [DEBUG] Response data:', JSON.stringify(checks, null, 2));
-  
+
   return Response.json(checks, {
     headers: {
       'Content-Type': 'application/json',

@@ -1,8 +1,9 @@
 // lib/auth.ts
 import { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
-import { prisma } from '../lib/prisma'
+import { getDb } from './db'
 import bcrypt from 'bcryptjs'
+import sql from 'mssql'
 
 declare module 'next-auth' {
   interface User {
@@ -39,11 +40,19 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        const user = await prisma.users.findUnique({
-          where: { username: credentials.username }
-        })
+        const pool = await getDb()
+        
+        const result = await pool.request()
+          .input('username', sql.NVarChar, credentials.username)
+          .query('SELECT * FROM users WHERE username = @username')
 
-        if (!user || !user.active) {
+        if (result.recordset.length === 0) {
+          return null
+        }
+
+        const user = result.recordset[0]
+
+        if (!user.active) {
           return null
         }
 
@@ -56,10 +65,11 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        await prisma.users.update({
-          where: { id: user.id },
-          data: { lastLogin: new Date() }
-        })
+        // Atualizar último login
+        await pool.request()
+          .input('id', sql.Int, user.id)
+          .input('lastLogin', sql.DateTime, new Date())
+          .query('UPDATE users SET lastLogin = @lastLogin WHERE id = @id')
 
         return {
           id: user.id.toString(),

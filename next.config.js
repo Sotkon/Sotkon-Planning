@@ -6,18 +6,13 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Incluir arquivos do Prisma no build
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals.push({
-        '@prisma/client': 'commonjs @prisma/client'
+        'mssql': 'commonjs mssql'
       });
     }
     return config;
-  },
-  // Copiar schema do Prisma
-  experimental: {
-    serverComponentsExternalPackages: ['@prisma/client', 'prisma']
   }
 }
 

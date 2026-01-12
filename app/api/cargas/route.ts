@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getDb } from '@/lib/db';
+import sql from 'mssql';
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    
+
     // Parâmetros
     const dataInicio = searchParams.get('dataInicio') || new Date().toISOString().split('T')[0];
     const language = searchParams.get('language') || 'pt';
@@ -18,46 +19,60 @@ export async function GET(request: NextRequest) {
     const [year, month, day] = dataInicio.split('-').map(Number);
     const dataInicioDate = new Date(year, month - 1, day);
 
-    // Query base
-    let whereClause: any = {
-      dataPrevistaDeCarga: {
-        not: null,
-        gte: dataInicioDate
-      }
-    };
+    const pool = await getDb();
+    const dbRequest = pool.request(); 
 
-    // Filtro estado (0 = todos exceto 4)
+    // Construir query SQL
+    let whereConditions = ['dataPrevistaDeCarga IS NOT NULL', 'dataPrevistaDeCarga >= @dataInicio'];
+    dbRequest.input('dataInicio', sql.DateTime, dataInicioDate);
+
+    // Filtro estado
     if (estadoId === 0) {
-      whereClause.estadoId = { not: 4 };
+      whereConditions.push('estadoId <> 4');
     } else if (estadoId > 0) {
-      whereClause.estadoId = estadoId;
+      whereConditions.push('estadoId = @estadoId');
+      dbRequest.input('estadoId', sql.Int, estadoId);
     }
 
     // Filtro país
     if (countryId > 0) {
-      whereClause.countryId = countryId;
+      whereConditions.push('countryId = @countryId');
+      dbRequest.input('countryId', sql.Int, countryId);
     }
 
-    // Filtro texto (SQL Server = case-insensitive por padrão!)
+    // Filtro texto
     if (textToSearch) {
-      whereClause.OR = [
-        { cliente: { contains: textToSearch } },
-        { encomendaDoCliente: { contains: textToSearch } },
-        { projecto: { contains: textToSearch } },
-        { localizacao: { contains: textToSearch } }
-      ];
+      whereConditions.push(`(
+        cliente LIKE @textToSearch OR 
+        encomendaDoCliente LIKE @textToSearch OR 
+        projecto LIKE @textToSearch OR 
+        localizacao LIKE @textToSearch
+      )`);
+      dbRequest.input('textToSearch', sql.NVarChar, `%${textToSearch}%`);
     }
 
-    // Buscar dados
-    const [cargas, totalCount] = await Promise.all([
-      prisma.tblPlanningCargas.findMany({
-        where: whereClause,
-        orderBy: { dataPrevistaDeCarga: 'asc' },
-        skip: pageIndex * pageSize,
-        take: pageSize,
-      }),
-      prisma.tblPlanningCargas.count({ where: whereClause })
+    const whereClause = whereConditions.join(' AND ');
+
+    // Query principal
+    const offset = pageIndex * pageSize;
+    const queryText = `
+      SELECT * FROM tblPlanningCargas
+      WHERE ${whereClause}
+      ORDER BY dataPrevistaDeCarga ASC
+      OFFSET ${offset} ROWS FETCH NEXT ${pageSize} ROWS ONLY
+    `;
+
+    const countQuery = `
+      SELECT COUNT(*) as total FROM tblPlanningCargas
+      WHERE ${whereClause}
+    `;
+
+    const [cargas, countResult] = await Promise.all([
+      dbRequest.query(queryText),
+      pool.request().query(countQuery)
     ]);
+
+    const totalCount = countResult.recordset[0].total;
 
     // Mapear estados
     const estadosMap: Record<number, Record<string, string>> = {
@@ -67,13 +82,12 @@ export async function GET(request: NextRequest) {
       4: { pt: 'REALIZADA', en: 'COMPLETED', fr: 'RÉALISÉ', es: 'REALIZADA' }
     };
 
-    // Mapear países
     const paisesMap: Record<number, string> = {
       1: 'PT', 2: 'SP', 3: 'FR', 4: 'INT'
     };
 
     // Formatar dados
-    const items = cargas.map(carga => ({
+    const items = cargas.recordset.map((carga: any) => ({
       id: carga.id,
       cliente: carga.cliente || '',
       paisId: carga.countryId,
@@ -85,13 +99,13 @@ export async function GET(request: NextRequest) {
       estadoId: carga.estadoId || 0,
       estadoStr: estadosMap[carga.estadoId || 0]?.[language] || '',
       dataPrevistaDeCarga: carga.dataPrevistaDeCarga,
-      dataPrevistaDeCargaStr: carga.dataPrevistaDeCarga 
+      dataPrevistaDeCargaStr: carga.dataPrevistaDeCarga
         ? new Date(carga.dataPrevistaDeCarga).toLocaleDateString('pt-PT')
         : '',
       horaPrevistaDeCargaStr: carga.dataPrevistaDeCarga
-        ? new Date(carga.dataPrevistaDeCarga).toLocaleTimeString('pt-PT', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
+        ? new Date(carga.dataPrevistaDeCarga).toLocaleTimeString('pt-PT', {
+            hour: '2-digit',
+            minute: '2-digit'
           })
         : '',
       prazoDeEntregaPrevistoStr: carga.prazoDeEntregaPrevisto || '',
@@ -123,9 +137,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ... (mantém o GET existente)
-
-// POST - Criar nova carga
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -138,47 +149,64 @@ export async function POST(request: NextRequest) {
       dataPrevistaDeCarga = new Date(year, month - 1, day, hour, minute);
     }
 
+    const pool = await getDb();
+    
     // Criar carga
-    const carga = await prisma.tblPlanningCargas.create({
-      data: {
-        cliente: body.cliente,
-        countryId: body.paisId,
-        encomendaDoCliente: body.encomendaDoCliente,
-        encomendaPrimavera: body.encomendaPrimavera,
-        projecto: body.projecto,
-        estadoId: body.estadoId,
-        dataPrevistaDeCarga: dataPrevistaDeCarga,
-        prazoDeEntregaPrevisto: body.prazoDeEntregaPrevisto,
-        contactosParaEntrega: body.contactosParaEntrega,
-        mercadoria: body.mercadoria,
-        condicoesDePagamento: body.condicoesDePagamento,
-        mercadoriaQueFaltaEntregar: body.mercadoriaQueFaltaEntregar,
-        localizacao: body.localizacao,
-        transportador: body.transportador,
-        custos_de_transporte: body.custos_de_transporte ? parseFloat(body.custos_de_transporte) : null,
-        dateCreated: new Date()
-      }
-    });
+    const result = await pool.request()
+      .input('cliente', sql.NVarChar, body.cliente)
+      .input('countryId', sql.Int, body.paisId)
+      .input('encomendaDoCliente', sql.NVarChar, body.encomendaDoCliente)
+      .input('encomendaPrimavera', sql.NVarChar, body.encomendaPrimavera)
+      .input('projecto', sql.NVarChar, body.projecto)
+      .input('estadoId', sql.Int, body.estadoId)
+      .input('dataPrevistaDeCarga', sql.DateTime, dataPrevistaDeCarga)
+      .input('prazoDeEntregaPrevisto', sql.NVarChar, body.prazoDeEntregaPrevisto)
+      .input('contactosParaEntrega', sql.NVarChar, body.contactosParaEntrega)
+      .input('mercadoria', sql.NVarChar, body.mercadoria)
+      .input('condicoesDePagamento', sql.NVarChar, body.condicoesDePagamento)
+      .input('mercadoriaQueFaltaEntregar', sql.NVarChar, body.mercadoriaQueFaltaEntregar)
+      .input('localizacao', sql.NVarChar, body.localizacao)
+      .input('transportador', sql.NVarChar, body.transportador)
+      .input('custos_de_transporte', sql.Decimal(18, 2), body.custos_de_transporte ? parseFloat(body.custos_de_transporte) : null)
+      .input('dateCreated', sql.DateTime, new Date())
+      .query(`
+        INSERT INTO tblPlanningCargas (
+          cliente, countryId, encomendaDoCliente, encomendaPrimavera, projecto,
+          estadoId, dataPrevistaDeCarga, prazoDeEntregaPrevisto, contactosParaEntrega,
+          mercadoria, condicoesDePagamento, mercadoriaQueFaltaEntregar, localizacao,
+          transportador, custos_de_transporte, dateCreated
+        )
+        OUTPUT INSERTED.id
+        VALUES (
+          @cliente, @countryId, @encomendaDoCliente, @encomendaPrimavera, @projecto,
+          @estadoId, @dataPrevistaDeCarga, @prazoDeEntregaPrevisto, @contactosParaEntrega,
+          @mercadoria, @condicoesDePagamento, @mercadoriaQueFaltaEntregar, @localizacao,
+          @transportador, @custos_de_transporte, @dateCreated
+        )
+      `);
+
+    const cargaId = result.recordset[0].id;
 
     // Inserir serviços
     if (body.servicosARealizar) {
-      const servicosIds = Array.isArray(body.servicosARealizar) 
-        ? body.servicosARealizar 
+      const servicosIds = Array.isArray(body.servicosARealizar)
+        ? body.servicosARealizar
         : body.servicosARealizar.split(',').map((s: string) => parseInt(s));
 
       for (const servicoId of servicosIds) {
         if (servicoId > 0) {
-          await prisma.tblPlanningCargaServicos.create({
-            data: {
-              planningCargaId: carga.id,
-              servicoId: servicoId
-            }
-          });
+          await pool.request()
+            .input('planningCargaId', sql.Int, cargaId)
+            .input('servicoId', sql.Int, servicoId)
+            .query(`
+              INSERT INTO tblPlanningCargaServicos (planningCargaId, servicoId)
+              VALUES (@planningCargaId, @servicoId)
+            `);
         }
       }
     }
 
-    return NextResponse.json({ success: true, id: carga.id }, { status: 201 });
+    return NextResponse.json({ success: true, id: cargaId }, { status: 201 });
 
   } catch (error) {
     console.error('Error creating carga:', error);

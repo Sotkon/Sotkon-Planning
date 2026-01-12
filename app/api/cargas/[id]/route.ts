@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getDb } from '@/lib/db';
+import sql from 'mssql';
 
 // GET - Buscar carga por ID
 export async function GET(
@@ -9,22 +10,25 @@ export async function GET(
   try {
     const { id } = await params;
     const idNumber = parseInt(id);
+    const pool = await getDb();
 
-    const carga = await prisma.tblPlanningCargas.findUnique({
-      where: { id: idNumber }
-    });
+    const cargaResult = await pool.request()
+      .input('id', sql.Int, idNumber)
+      .query('SELECT * FROM tblPlanningCargas WHERE id = @id');
 
-    if (!carga) {
+    if (cargaResult.recordset.length === 0) {
       return NextResponse.json(
         { error: 'Carga não encontrada' },
         { status: 404 }
       );
     }
 
+    const carga = cargaResult.recordset[0];
+
     // Buscar serviços da carga
-    const servicos = await prisma.tblPlanningCargaServicos.findMany({
-      where: { planningCargaId: idNumber }
-    });
+    const servicosResult = await pool.request()
+      .input('planningCargaId', sql.Int, idNumber)
+      .query('SELECT servicoId FROM tblPlanningCargaServicos WHERE planningCargaId = @planningCargaId');
 
     // Mapear países
     const paisesMap: Record<number, string> = {
@@ -40,8 +44,8 @@ export async function GET(
       encomendaPrimavera: carga.encomendaPrimavera || '',
       projecto: carga.projecto || '',
       estadoId: carga.estadoId || 0,
-      dataPrevistaDeCarga: carga.dataPrevistaDeCarga?.toISOString().split('T')[0] || '',
-      horaPrevistaDeCarga: carga.dataPrevistaDeCarga 
+      dataPrevistaDeCarga: carga.dataPrevistaDeCarga ? new Date(carga.dataPrevistaDeCarga).toISOString().split('T')[0] : '',
+      horaPrevistaDeCarga: carga.dataPrevistaDeCarga
         ? new Date(carga.dataPrevistaDeCarga).toTimeString().substring(0, 5)
         : '',
       prazoDeEntregaPrevisto: carga.prazoDeEntregaPrevisto || '',
@@ -52,7 +56,7 @@ export async function GET(
       localizacao: carga.localizacao || '',
       transportador: carga.transportador || '',
       custos_de_transporte: carga.custos_de_transporte?.toString() || '',
-      servicosARealizar: servicos.map((s: any) => s.servicoId).filter((id: number | null): id is number => id !== null)
+      servicosARealizar: servicosResult.recordset.map((s: any) => s.servicoId).filter((id: number | null): id is number => id !== null)
     });
 
   } catch (error) {
@@ -73,6 +77,7 @@ export async function PUT(
     const { id } = await params;
     const idNumber = parseInt(id);
     const body = await request.json();
+    const pool = await getDb();
 
     // Construir datetime
     let dataPrevistaDeCarga: Date | null = null;
@@ -83,52 +88,66 @@ export async function PUT(
     }
 
     // Atualizar carga
-    const carga = await prisma.tblPlanningCargas.update({
-      where: { id: idNumber },
-      data: {
-        cliente: body.cliente,
-        countryId: body.paisId,
-        encomendaDoCliente: body.encomendaDoCliente,
-        encomendaPrimavera: body.encomendaPrimavera,
-        projecto: body.projecto,
-        estadoId: body.estadoId,
-        dataPrevistaDeCarga: dataPrevistaDeCarga,
-        prazoDeEntregaPrevisto: body.prazoDeEntregaPrevisto,
-        contactosParaEntrega: body.contactosParaEntrega,
-        mercadoria: body.mercadoria,
-        condicoesDePagamento: body.condicoesDePagamento,
-        mercadoriaQueFaltaEntregar: body.mercadoriaQueFaltaEntregar,
-        localizacao: body.localizacao,
-        transportador: body.transportador,
-        custos_de_transporte: body.custos_de_transporte ? parseFloat(body.custos_de_transporte) : null
-      }
-    });
+    await pool.request()
+      .input('id', sql.Int, idNumber)
+      .input('cliente', sql.NVarChar, body.cliente)
+      .input('countryId', sql.Int, body.paisId)
+      .input('encomendaDoCliente', sql.NVarChar, body.encomendaDoCliente)
+      .input('encomendaPrimavera', sql.NVarChar, body.encomendaPrimavera)
+      .input('projecto', sql.NVarChar, body.projecto)
+      .input('estadoId', sql.Int, body.estadoId)
+      .input('dataPrevistaDeCarga', sql.DateTime, dataPrevistaDeCarga)
+      .input('prazoDeEntregaPrevisto', sql.NVarChar, body.prazoDeEntregaPrevisto)
+      .input('contactosParaEntrega', sql.NVarChar, body.contactosParaEntrega)
+      .input('mercadoria', sql.NVarChar, body.mercadoria)
+      .input('condicoesDePagamento', sql.NVarChar, body.condicoesDePagamento)
+      .input('mercadoriaQueFaltaEntregar', sql.NVarChar, body.mercadoriaQueFaltaEntregar)
+      .input('localizacao', sql.NVarChar, body.localizacao)
+      .input('transportador', sql.NVarChar, body.transportador)
+      .input('custos_de_transporte', sql.Decimal(18, 2), body.custos_de_transporte ? parseFloat(body.custos_de_transporte) : null)
+      .query(`
+        UPDATE tblPlanningCargas SET
+          cliente = @cliente,
+          countryId = @countryId,
+          encomendaDoCliente = @encomendaDoCliente,
+          encomendaPrimavera = @encomendaPrimavera,
+          projecto = @projecto,
+          estadoId = @estadoId,
+          dataPrevistaDeCarga = @dataPrevistaDeCarga,
+          prazoDeEntregaPrevisto = @prazoDeEntregaPrevisto,
+          contactosParaEntrega = @contactosParaEntrega,
+          mercadoria = @mercadoria,
+          condicoesDePagamento = @condicoesDePagamento,
+          mercadoriaQueFaltaEntregar = @mercadoriaQueFaltaEntregar,
+          localizacao = @localizacao,
+          transportador = @transportador,
+          custos_de_transporte = @custos_de_transporte
+        WHERE id = @id
+      `);
 
     // Atualizar serviços
     if (body.servicosARealizar) {
       // Apagar serviços existentes
-      await prisma.tblPlanningCargaServicos.deleteMany({
-        where: { planningCargaId: idNumber }
-      });
+      await pool.request()
+        .input('planningCargaId', sql.Int, idNumber)
+        .query('DELETE FROM tblPlanningCargaServicos WHERE planningCargaId = @planningCargaId');
 
       // Inserir novos serviços
-      const servicosIds = Array.isArray(body.servicosARealizar) 
-        ? body.servicosARealizar 
+      const servicosIds = Array.isArray(body.servicosARealizar)
+        ? body.servicosARealizar
         : body.servicosARealizar.split(',').map((s: string) => parseInt(s));
 
       for (const servicoId of servicosIds) {
         if (servicoId > 0) {
-          await prisma.tblPlanningCargaServicos.create({
-            data: {
-              planningCargaId: idNumber,
-              servicoId: servicoId
-            }
-          });
+          await pool.request()
+            .input('planningCargaId', sql.Int, idNumber)
+            .input('servicoId', sql.Int, servicoId)
+            .query('INSERT INTO tblPlanningCargaServicos (planningCargaId, servicoId) VALUES (@planningCargaId, @servicoId)');
         }
       }
     }
 
-    return NextResponse.json({ success: true, id: carga.id });
+    return NextResponse.json({ success: true, id: idNumber });
 
   } catch (error) {
     console.error('Error updating carga:', error);
@@ -147,16 +166,17 @@ export async function DELETE(
   try {
     const { id } = await params;
     const idNumber = parseInt(id);
+    const pool = await getDb();
 
     // Apagar serviços primeiro
-    await prisma.tblPlanningCargaServicos.deleteMany({
-      where: { planningCargaId: idNumber }
-    });
+    await pool.request()
+      .input('planningCargaId', sql.Int, idNumber)
+      .query('DELETE FROM tblPlanningCargaServicos WHERE planningCargaId = @planningCargaId');
 
     // Apagar carga
-    await prisma.tblPlanningCargas.delete({
-      where: { id: idNumber }
-    });
+    await pool.request()
+      .input('id', sql.Int, idNumber)
+      .query('DELETE FROM tblPlanningCargas WHERE id = @id');
 
     return NextResponse.json({ success: true });
 

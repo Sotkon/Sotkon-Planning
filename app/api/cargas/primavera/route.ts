@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getDb } from '@/lib/db';
+import sql from 'mssql';
 
 // Tipos
 interface PrimaveraAuth {
@@ -71,6 +72,7 @@ export async function POST() {
 
     // 3. Processar cada carga
     let linhasInseridas = 0;
+    const pool = await getDb();
 
     const servicosMap: Record<string, number> = {
       'Nenhum': 1,
@@ -84,18 +86,22 @@ export async function POST() {
 
     for (const carga of cargasList.Data) {
       // Verificar se já existe
-      const existe = await prisma.tblPlanningCargas.findFirst({
-        where: {
-          id_primavera: carga.ID,
-          cliente: carga.Cliente,
-          mercadoria: carga.MercadoriaaEntregar,
-          localizacao: carga.LocaldeEntrega
-        }
-      });
+      const existeResult = await pool.request()
+        .input('id_primavera', sql.NVarChar, carga.ID)
+        .input('cliente', sql.NVarChar, carga.Cliente)
+        .input('mercadoria', sql.NVarChar, carga.MercadoriaaEntregar)
+        .input('localizacao', sql.NVarChar, carga.LocaldeEntrega)
+        .query(`
+          SELECT TOP 1 id FROM tblPlanningCargas
+          WHERE id_primavera = @id_primavera
+            AND cliente = @cliente
+            AND mercadoria = @mercadoria
+            AND localizacao = @localizacao
+        `);
 
-      if (!existe) {
+      if (existeResult.recordset.length === 0) {
         // Mapear país
-        const countryId = 
+        const countryId =
           carga.Pais === 'PT' ? 1 :
           carga.Pais === 'SP' ? 2 :
           carga.Pais === 'FR' ? 3 :
@@ -106,39 +112,54 @@ export async function POST() {
         const dataPrevistaDeCarga = new Date(now.getFullYear(), 11, 31, 23, 59, 0);
 
         // Inserir carga
-        const novaCarga = await prisma.tblPlanningCargas.create({
-          data: {
-            id_primavera: carga.ID,
-            cliente: carga.Cliente,
-            condicoesDePagamento: carga.CondicoesdePagamento,
-            contactosParaEntrega: carga.ContactoParaEntrega,
-            countryId: countryId,
-            encomendaDoCliente: carga.EncomendadoCliente,
-            encomendaPrimavera: carga.EncomendaPrimavera,
-            mercadoria: carga.MercadoriaaEntregar,
-            mercadoriaQueFaltaEntregar: carga.MercadoriaQueFaltaEntregar,
-            prazoDeEntregaPrevisto: carga.DataEntregaPrevista,
-            projecto: carga.Projeto,
-            localizacao: carga.LocaldeEntrega,
-            dataPrevistaDeCarga: dataPrevistaDeCarga,
-            estadoId: 1, // NOVA
-            dateCreated: new Date(carga.DatadaEncomenda)
-          }
-        });
+        const insertResult = await pool.request()
+          .input('id_primavera', sql.NVarChar, carga.ID)
+          .input('cliente', sql.NVarChar, carga.Cliente)
+          .input('condicoesDePagamento', sql.NVarChar, carga.CondicoesdePagamento)
+          .input('contactosParaEntrega', sql.NVarChar, carga.ContactoParaEntrega)
+          .input('countryId', sql.Int, countryId)
+          .input('encomendaDoCliente', sql.NVarChar, carga.EncomendadoCliente)
+          .input('encomendaPrimavera', sql.NVarChar, carga.EncomendaPrimavera)
+          .input('mercadoria', sql.NVarChar, carga.MercadoriaaEntregar)
+          .input('mercadoriaQueFaltaEntregar', sql.NVarChar, carga.MercadoriaQueFaltaEntregar)
+          .input('prazoDeEntregaPrevisto', sql.NVarChar, carga.DataEntregaPrevista)
+          .input('projecto', sql.NVarChar, carga.Projeto)
+          .input('localizacao', sql.NVarChar, carga.LocaldeEntrega)
+          .input('dataPrevistaDeCarga', sql.DateTime, dataPrevistaDeCarga)
+          .input('estadoId', sql.Int, 1)
+          .input('dateCreated', sql.DateTime, new Date(carga.DatadaEncomenda))
+          .query(`
+            INSERT INTO tblPlanningCargas (
+              id_primavera, cliente, condicoesDePagamento, contactosParaEntrega,
+              countryId, encomendaDoCliente, encomendaPrimavera, mercadoria,
+              mercadoriaQueFaltaEntregar, prazoDeEntregaPrevisto, projecto,
+              localizacao, dataPrevistaDeCarga, estadoId, dateCreated
+            )
+            OUTPUT INSERTED.id
+            VALUES (
+              @id_primavera, @cliente, @condicoesDePagamento, @contactosParaEntrega,
+              @countryId, @encomendaDoCliente, @encomendaPrimavera, @mercadoria,
+              @mercadoriaQueFaltaEntregar, @prazoDeEntregaPrevisto, @projecto,
+              @localizacao, @dataPrevistaDeCarga, @estadoId, @dateCreated
+            )
+          `);
+
+        const novaCargaId = insertResult.recordset[0].id;
 
         // Inserir serviços
         if (carga.ServicosaRealizar) {
           const servicosArray = carga.ServicosaRealizar.split(',');
-          
+
           for (const servicoNome of servicosArray) {
             const servicoId = servicosMap[servicoNome.trim()];
             if (servicoId) {
-              await prisma.tblPlanningCargaServicos.create({
-                data: {
-                  planningCargaId: novaCarga.id,
-                  servicoId: servicoId
-                }
-              });
+              await pool.request()
+                .input('planningCargaId', sql.Int, novaCargaId)
+                .input('servicoId', sql.Int, servicoId)
+                .query(`
+                  INSERT INTO tblPlanningCargaServicos (planningCargaId, servicoId)
+                  VALUES (@planningCargaId, @servicoId)
+                `);
             }
           }
         }

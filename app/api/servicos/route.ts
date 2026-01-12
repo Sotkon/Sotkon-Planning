@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getDb } from '@/lib/db';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const language = searchParams.get('language') || 'pt';
 
-    const servicos = await prisma.tblPlanningServicosTipos.findMany({
-      orderBy: { id: 'asc' }
-    });
+    const pool = await getDb();
+    const result = await pool.request().query('SELECT * FROM tblPlanningServicosTipos ORDER BY id ASC');
+    
+    const servicos = result.recordset;
 
     // Tipagem explícita
     type Servico = {
@@ -38,4 +39,3 @@ export async function GET(request: Request) {
     );
   }
 }
-
