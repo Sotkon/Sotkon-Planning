@@ -1,10 +1,10 @@
 import sql from 'mssql';
 
 const config: sql.config = {
-  server: 'euw-sql-planning-dev01.database.windows.net',
-  database: 'euw-mssql-db-planning-dev01',
-  user: 'planning_app',
-  password: 'InternalTool@2026',
+  server: process.env.DB_SERVER || '',
+  database: process.env.DB_DATABASE || '',
+  user: process.env.DB_USER || '',
+  password: process.env.DB_PASSWORD || '',
   options: {
     encrypt: true,
     trustServerCertificate: false,
@@ -13,57 +13,53 @@ const config: sql.config = {
   pool: {
     max: 10,
     min: 0,
-    idleTimeoutMillis: 30000
+    idleTimeoutMillis: 30000,
   },
   connectionTimeout: 30000,
   requestTimeout: 30000,
 };
 
 let pool: sql.ConnectionPool | null = null;
-let connecting: Promise<sql.ConnectionPool> | null = null;
 
-export async function getDb(): Promise<sql.ConnectionPool> {
-  // Se já existe uma conexão ativa, retorna
-  if (pool && pool.connected) {
-    return pool;
-  }
-
-  // Se já está conectando, aguarda a conexão
-  if (connecting) {
-    return connecting;
-  }
-
-  // Inicia nova conexão
-  connecting = (async () => {
-    try {
-      console.log('🔌 Connecting to SQL Server...');
-      pool = new sql.ConnectionPool(config);
-      await pool.connect();
-      console.log('✅ Connected to SQL Server');
-      return pool;
-    } catch (error) {
-      console.error('❌ Failed to connect to SQL Server:', error);
+export async function getConnection() {
+  try {
+    if (pool) {
+      // Verificar se a conexão ainda está ativa
+      if (pool.connected) {
+        return pool;
+      }
+      // Se não está conectada, fechar e reconectar
+      await pool.close();
       pool = null;
-      throw error;
-    } finally {
-      connecting = null;
     }
-  })();
 
-  return connecting;
-}
+    // Validar configuração
+    if (!config.server || !config.database || !config.user || !config.password) {
+      console.error('[DB] Missing database configuration:', {
+        server: !!config.server,
+        database: !!config.database,
+        user: !!config.user,
+        password: !!config.password
+      });
+      throw new Error('Database configuration is incomplete. Check environment variables.');
+    }
 
-// Helper para queries simples
-export async function query<T = any>(queryText: string, params?: Record<string, any>): Promise<T[]> {
-  const pool = await getDb();
-  const request = pool.request();
-  
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      request.input(key, value);
+    console.log(`[DB] Connecting to ${config.server}/${config.database}...`);
+    pool = await sql.connect(config);
+    console.log('[DB] Connected successfully');
+
+    // Registar evento de erro para reconexão automática
+    pool.on('error', (err) => {
+      console.error('[DB] Pool error:', err);
+      pool = null;
     });
+
+    return pool;
+  } catch (error) {
+    console.error('[DB] Connection error:', error);
+    pool = null;
+    throw error;
   }
-  
-  const result = await request.query(queryText);
-  return result.recordset;
 }
+
+export { sql };

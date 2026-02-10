@@ -1,0 +1,71 @@
+name: Deploy Next.js to Azure App Service
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    name: Build and Deploy Job
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js app
+        run: npm run build
+        env:
+          DB_SERVER: ${{ secrets.DB_SERVER }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+
+      - name: Prepare deployment package
+        run: |
+          # Debug: Show what standalone contains
+          echo "=== Contents of .next/standalone ==="
+          ls -la .next/standalone/
+          echo "=== Contents of .next/standalone/.next (if exists) ==="
+          ls -la .next/standalone/.next/ 2>/dev/null || echo "No .next inside standalone"
+
+          # Copy the entire standalone folder content
+          cp -r .next/standalone/. deploy/
+
+          # The standalone output should already have .next folder, but we need to add static
+          mkdir -p deploy/.next/static
+          cp -r .next/static/. deploy/.next/static/
+
+          # Copy public folder if exists
+          if [ -d "public" ]; then
+            cp -r public/. deploy/public/
+          fi
+
+          # Create package.json for Azure startup
+          echo '{"scripts":{"start":"node server.js"}}' > deploy/package.json
+
+          # Verify the structure
+          echo "=== Final deploy structure ==="
+          ls -la deploy/
+          echo "=== deploy/.next contents ==="
+          ls -la deploy/.next/
+          echo "=== Looking for BUILD_ID ==="
+          find deploy -name "BUILD_ID" 2>/dev/null || echo "BUILD_ID not found"
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'Internal-tool-planning'
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: deploy
+          clean: true
