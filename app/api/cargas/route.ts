@@ -1,189 +1,242 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getConnection, sql } from '@/lib/db';
+import {
+  Carga,
+  CargaInput,
+  COUNTRY_ID_MAP,
+  ESTADO_ID_MAP,
+  SERVICO_ID_MAP,
+  SERVICE_TO_ID,
+  Services
+} from '@/lib/types';
 
+// GET /api/cargas - Listar todas as cargas
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    
-    // Parâmetros
-    const dataInicio = searchParams.get('dataInicio') || new Date().toISOString().split('T')[0];
-    const language = searchParams.get('language') || 'pt';
-    const estadoId = parseInt(searchParams.get('estadoId') || '0');
-    const countryId = parseInt(searchParams.get('countryId') || '0');
-    const pageIndex = parseInt(searchParams.get('pageIndex') || '0');
-    const pageSize = parseInt(searchParams.get('pageSize') || '48');
-    const textToSearch = searchParams.get('textToSearch') || '';
+    const pool = await getConnection();
 
-    // Parse data início
-    const [year, month, day] = dataInicio.split('-').map(Number);
-    const dataInicioDate = new Date(year, month - 1, day);
+    // Parse query parameters for pagination and filtering
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '50', 10);
+    const year = searchParams.get('year'); // Filter by year (e.g., "2025")
+    const dateStart = searchParams.get('dateStart'); // Filter by date range start (e.g., "2025-01-01")
+    const dateEnd = searchParams.get('dateEnd'); // Filter by date range end (e.g., "2025-12-31")
+    const offset = (page - 1) * limit;
 
-    // Query base
-    let whereClause: any = {
-      dataPrevistaDeCarga: {
-        not: null,
-        gte: dataInicioDate
+    // Build WHERE clause for filtering (based on dataPrevistaDeCarga)
+    // Priority: date range > year filter
+    const whereConditions: string[] = [];
+
+    if (dateStart || dateEnd) {
+      // Date range filter - takes priority over year filter
+      if (dateStart && dateEnd) {
+        whereConditions.push(`(c.dataPrevistaDeCarga >= @dateStart AND c.dataPrevistaDeCarga <= @dateEnd)`);
+      } else if (dateStart) {
+        whereConditions.push(`(c.dataPrevistaDeCarga >= @dateStart)`);
+      } else if (dateEnd) {
+        whereConditions.push(`(c.dataPrevistaDeCarga <= @dateEnd)`);
       }
-    };
-
-    // Filtro estado (0 = todos exceto 4)
-    if (estadoId === 0) {
-      whereClause.estadoId = { not: 4 };
-    } else if (estadoId > 0) {
-      whereClause.estadoId = estadoId;
+    } else if (year) {
+      // Year filter - only if no date range specified
+      // Include records where dataPrevistaDeCarga is NULL (pending scheduling) or matches the year
+      whereConditions.push(`(YEAR(c.dataPrevistaDeCarga) = @year OR c.dataPrevistaDeCarga IS NULL)`);
     }
 
-    // Filtro país
-    if (countryId > 0) {
-      whereClause.countryId = countryId;
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+    // Get total count for pagination info
+    const countRequest = pool.request();
+    if (dateStart) countRequest.input('dateStart', sql.Date, dateStart);
+    if (dateEnd) countRequest.input('dateEnd', sql.Date, dateEnd);
+    if (year && !dateStart && !dateEnd) countRequest.input('year', sql.Int, parseInt(year, 10));
+
+    const countResult = await countRequest.query(`
+      SELECT COUNT(*) as total FROM [dbo].[tblPlanningCargas] c ${whereClause}
+    `);
+    const total = countResult.recordset[0].total;
+
+    // Buscar cargas with pagination
+    const cargasRequest = pool.request()
+      .input('offset', sql.Int, offset)
+      .input('limit', sql.Int, limit);
+
+    if (dateStart) cargasRequest.input('dateStart', sql.Date, dateStart);
+    if (dateEnd) cargasRequest.input('dateEnd', sql.Date, dateEnd);
+    if (year && !dateStart && !dateEnd) cargasRequest.input('year', sql.Int, parseInt(year, 10));
+
+    const cargasResult = await cargasRequest.query(`
+      SELECT
+        c.id,
+        c.cliente,
+        c.countryId,
+        c.encomendaDoCliente,
+        c.encomendaPrimavera,
+        c.projecto,
+        c.estadoId,
+        c.dataPrevistaDeCarga,
+        c.contactosParaEntrega,
+        c.mercadoria,
+        c.condicoesDePagamento,
+        c.mercadoriaQueFaltaEntregar,
+        c.dateCreated,
+        c.localizacao,
+        c.id_primavera as idPrimavera,
+        c.transportador,
+        c.custos_de_transporte as custosDeTransporte,
+        c.prazoDeEntregaPrevisto,
+        c.dataInicio,
+        c.dataFim,
+        c.duracao
+      FROM [dbo].[tblPlanningCargas] c
+      ${whereClause}
+      ORDER BY c.dataPrevistaDeCarga DESC, c.id DESC
+      OFFSET @offset ROWS
+      FETCH NEXT @limit ROWS ONLY
+    `);
+
+    // Buscar serviços de todas as cargas
+    const servicosResult = await pool.request().query(`
+      SELECT planningCargaId, servicoId
+      FROM [dbo].[tblPlanningCargaServicos]
+    `);
+
+    // Criar mapa de serviços por carga
+    const servicosByCarga: Record<number, number[]> = {};
+    for (const row of servicosResult.recordset) {
+      if (!servicosByCarga[row.planningCargaId]) {
+        servicosByCarga[row.planningCargaId] = [];
+      }
+      servicosByCarga[row.planningCargaId].push(row.servicoId);
     }
 
-    // Filtro texto (SQL Server = case-insensitive por padrão!)
-    if (textToSearch) {
-      whereClause.OR = [
-        { cliente: { contains: textToSearch } },
-        { encomendaDoCliente: { contains: textToSearch } },
-        { projecto: { contains: textToSearch } },
-        { localizacao: { contains: textToSearch } }
-      ];
-    }
+    // Mapear resultados para o tipo Carga
+    const cargas: Carga[] = cargasResult.recordset.map((row: Record<string, unknown>) => {
+      const servicoIds = servicosByCarga[row.id as number] || [];
+      const services: Services = {
+        transporte: servicoIds.includes(2),
+        instalacao: servicoIds.includes(3),
+        obraCivil: servicoIds.includes(4),
+        sotkisAccess: servicoIds.includes(5),
+        sotkisLevel: servicoIds.includes(6),
+        sotcare: servicoIds.includes(7)
+      };
 
-    // Buscar dados
-    const [cargas, totalCount] = await Promise.all([
-      prisma.tblPlanningCargas.findMany({
-        where: whereClause,
-        orderBy: { dataPrevistaDeCarga: 'asc' },
-        skip: pageIndex * pageSize,
-        take: pageSize,
-      }),
-      prisma.tblPlanningCargas.count({ where: whereClause })
-    ]);
-
-    // Mapear estados
-    const estadosMap: Record<number, Record<string, string>> = {
-      1: { pt: 'NOVA', en: 'NEW', fr: 'NOUVEAU', es: 'NUEVA' },
-      2: { pt: 'A DEFINIR', en: 'TO DEFINE', fr: 'À DÉFINIR', es: 'A DEFINIR' },
-      3: { pt: 'AGENDADA', en: 'SCHEDULED', fr: 'PLANIFIÉ', es: 'PROGRAMADA' },
-      4: { pt: 'REALIZADA', en: 'COMPLETED', fr: 'RÉALISÉ', es: 'REALIZADA' }
-    };
-
-    // Mapear países
-    const paisesMap: Record<number, string> = {
-      1: 'PT', 2: 'SP', 3: 'FR', 4: 'INT'
-    };
-
-    // Formatar dados
-    const items = cargas.map(carga => ({
-      id: carga.id,
-      cliente: carga.cliente || '',
-      paisId: carga.countryId,
-      paisStr: paisesMap[carga.countryId || 0] || '',
-      encomendaDoCliente: carga.encomendaDoCliente || '',
-      encomendaPrimavera: carga.encomendaPrimavera || '',
-      projecto: carga.projecto || '',
-      localizacao: carga.localizacao || '',
-      estadoId: carga.estadoId || 0,
-      estadoStr: estadosMap[carga.estadoId || 0]?.[language] || '',
-      dataPrevistaDeCarga: carga.dataPrevistaDeCarga,
-      dataPrevistaDeCargaStr: carga.dataPrevistaDeCarga 
-        ? new Date(carga.dataPrevistaDeCarga).toLocaleDateString('pt-PT')
-        : '',
-      horaPrevistaDeCargaStr: carga.dataPrevistaDeCarga
-        ? new Date(carga.dataPrevistaDeCarga).toLocaleTimeString('pt-PT', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-          })
-        : '',
-      prazoDeEntregaPrevistoStr: carga.prazoDeEntregaPrevisto || '',
-      contactosParaEntrega: carga.contactosParaEntrega || '',
-      mercadoria: carga.mercadoria || '',
-      condicoesDePagamento: carga.condicoesDePagamento || '',
-      mercadoriaQueFaltaEntregar: carga.mercadoriaQueFaltaEntregar || '',
-      dataCriacao: carga.dateCreated,
-      transportador: carga.transportador || '',
-      custos_de_transporte: carga.custos_de_transporte || ''
-    }));
-
-    const pagesCount = Math.ceil(totalCount / pageSize);
-
-    return NextResponse.json({
-      items,
-      pagesCount,
-      pageIndex,
-      language,
-      totalCount
+      return {
+        id: row.id as number,
+        cliente: row.cliente as string | null,
+        countryId: row.countryId as number | null,
+        market: row.countryId ? COUNTRY_ID_MAP[row.countryId as number] || null : null,
+        encomendaDoCliente: row.encomendaDoCliente as string | null,
+        encomendaPrimavera: row.encomendaPrimavera as string | null,
+        projecto: row.projecto as string | null,
+        estadoId: row.estadoId as number | null,
+        estado: row.estadoId ? ESTADO_ID_MAP[row.estadoId as number] || null : null,
+        dataPrevistaDeCarga: row.dataPrevistaDeCarga ? (row.dataPrevistaDeCarga as Date).toISOString() : null,
+        contactosParaEntrega: row.contactosParaEntrega as string | null,
+        mercadoria: row.mercadoria as string | null,
+        condicoesDePagamento: row.condicoesDePagamento as string | null,
+        mercadoriaQueFaltaEntregar: row.mercadoriaQueFaltaEntregar as string | null,
+        dateCreated: row.dateCreated ? (row.dateCreated as Date).toISOString() : null,
+        localizacao: row.localizacao as string | null,
+        idPrimavera: row.idPrimavera as string | null,
+        transportador: row.transportador as string | null,
+        custosDeTransporte: row.custosDeTransporte as number | null,
+        prazoDeEntregaPrevisto: row.prazoDeEntregaPrevisto as string | null,
+        dataInicio: row.dataInicio ? (row.dataInicio as Date).toISOString().split('T')[0] : null,
+        dataFim: row.dataFim ? (row.dataFim as Date).toISOString().split('T')[0] : null,
+        duracao: row.duracao as number | null,
+        services
+      };
     });
 
+    // Return with pagination metadata
+    return NextResponse.json({
+      data: cargas,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasMore: page * limit < total
+      }
+    });
   } catch (error) {
     console.error('Error fetching cargas:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch cargas' },
+      { error: 'Erro ao buscar cargas' },
       { status: 500 }
     );
   }
 }
 
-// ... (mantém o GET existente)
-
-// POST - Criar nova carga
+// POST /api/cargas - Criar nova carga
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body: CargaInput = await request.json();
+    const pool = await getConnection();
 
-    // Construir datetime
-    let dataPrevistaDeCarga: Date | null = null;
-    if (body.dataPrevistaDeCarga && body.horaPrevistaDeCarga) {
-      const [year, month, day] = body.dataPrevistaDeCarga.split('-').map(Number);
-      const [hour, minute] = body.horaPrevistaDeCarga.split(':').map(Number);
-      dataPrevistaDeCarga = new Date(year, month - 1, day, hour, minute);
-    }
+    // Inserir carga
+    const result = await pool.request()
+      .input('cliente', sql.NVarChar(255), body.cliente || null)
+      .input('countryId', sql.Int, body.countryId || null)
+      .input('encomendaDoCliente', sql.NVarChar(255), body.encomendaDoCliente || null)
+      .input('encomendaPrimavera', sql.NVarChar(255), body.encomendaPrimavera || null)
+      .input('projecto', sql.NVarChar(255), body.projecto || null)
+      .input('estadoId', sql.Int, body.estadoId || 1) // Default: Nova
+      .input('dataPrevistaDeCarga', sql.DateTime, body.dataPrevistaDeCarga ? new Date(body.dataPrevistaDeCarga) : null)
+      .input('contactosParaEntrega', sql.NVarChar(sql.MAX), body.contactosParaEntrega || null)
+      .input('mercadoria', sql.NVarChar(sql.MAX), body.mercadoria || null)
+      .input('condicoesDePagamento', sql.NVarChar(255), body.condicoesDePagamento || null)
+      .input('mercadoriaQueFaltaEntregar', sql.NVarChar(sql.MAX), body.mercadoriaQueFaltaEntregar || null)
+      .input('localizacao', sql.NVarChar(sql.MAX), body.localizacao || null)
+      .input('idPrimavera', sql.NVarChar(255), body.idPrimavera || null)
+      .input('transportador', sql.NVarChar(255), body.transportador || null)
+      .input('custosDeTransporte', sql.Decimal(18, 2), body.custosDeTransporte || null)
+      .input('prazoDeEntregaPrevisto', sql.NVarChar(50), body.prazoDeEntregaPrevisto || null)
+      .input('dataInicio', sql.Date, body.dataInicio ? new Date(body.dataInicio) : null)
+      .input('dataFim', sql.Date, body.dataFim ? new Date(body.dataFim) : null)
+      .input('dateCreated', sql.DateTime, new Date())
+      .query(`
+        INSERT INTO [dbo].[tblPlanningCargas] (
+          cliente, countryId, encomendaDoCliente, encomendaPrimavera, projecto,
+          estadoId, dataPrevistaDeCarga, contactosParaEntrega, mercadoria,
+          condicoesDePagamento, mercadoriaQueFaltaEntregar, localizacao,
+          id_primavera, transportador, custos_de_transporte, prazoDeEntregaPrevisto,
+          dataInicio, dataFim, dateCreated
+        ) VALUES (
+          @cliente, @countryId, @encomendaDoCliente, @encomendaPrimavera, @projecto,
+          @estadoId, @dataPrevistaDeCarga, @contactosParaEntrega, @mercadoria,
+          @condicoesDePagamento, @mercadoriaQueFaltaEntregar, @localizacao,
+          @idPrimavera, @transportador, @custosDeTransporte, @prazoDeEntregaPrevisto,
+          @dataInicio, @dataFim, @dateCreated
+        );
+        SELECT SCOPE_IDENTITY() as id;
+      `);
 
-    // Criar carga
-    const carga = await prisma.tblPlanningCargas.create({
-      data: {
-        cliente: body.cliente,
-        countryId: body.paisId,
-        encomendaDoCliente: body.encomendaDoCliente,
-        encomendaPrimavera: body.encomendaPrimavera,
-        projecto: body.projecto,
-        estadoId: body.estadoId,
-        dataPrevistaDeCarga: dataPrevistaDeCarga,
-        prazoDeEntregaPrevisto: body.prazoDeEntregaPrevisto,
-        contactosParaEntrega: body.contactosParaEntrega,
-        mercadoria: body.mercadoria,
-        condicoesDePagamento: body.condicoesDePagamento,
-        mercadoriaQueFaltaEntregar: body.mercadoriaQueFaltaEntregar,
-        localizacao: body.localizacao,
-        transportador: body.transportador,
-        custos_de_transporte: body.custos_de_transporte ? parseFloat(body.custos_de_transporte) : null,
-        dateCreated: new Date()
-      }
-    });
+    const newId = result.recordset[0].id;
 
-    // Inserir serviços
-    if (body.servicosARealizar) {
-      const servicosIds = Array.isArray(body.servicosARealizar) 
-        ? body.servicosARealizar 
-        : body.servicosARealizar.split(',').map((s: string) => parseInt(s));
-
-      for (const servicoId of servicosIds) {
-        if (servicoId > 0) {
-          await prisma.tblPlanningCargaServicos.create({
-            data: {
-              planningCargaId: carga.id,
-              servicoId: servicoId
-            }
-          });
+    // Inserir serviços se fornecidos
+    if (body.services && body.services.length > 0) {
+      for (const serviceName of body.services) {
+        const servicoId = SERVICE_TO_ID[serviceName];
+        if (servicoId) {
+          await pool.request()
+            .input('planningCargaId', sql.Int, newId)
+            .input('servicoId', sql.Int, servicoId)
+            .query(`
+              INSERT INTO [dbo].[tblPlanningCargaServicos] (planningCargaId, servicoId)
+              VALUES (@planningCargaId, @servicoId)
+            `);
         }
       }
     }
 
-    return NextResponse.json({ success: true, id: carga.id }, { status: 201 });
-
+    return NextResponse.json({ id: newId, message: 'Carga criada com sucesso' }, { status: 201 });
   } catch (error) {
     console.error('Error creating carga:', error);
     return NextResponse.json(
-      { error: 'Failed to create carga' },
+      { error: 'Erro ao criar carga' },
       { status: 500 }
     );
   }
