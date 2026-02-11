@@ -58,7 +58,8 @@ export default function Home() {
     page: number = 1,
     append: boolean = false,
     year?: number | null,
-    dateRange?: { start: string; end: string }
+    dateRange?: { start: string; end: string },
+    limit: number = 50
   ) => {
     try {
       if (page === 1) {
@@ -73,7 +74,7 @@ export default function Home() {
 
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: '50' // Paginate with 50 items per page for infinite scroll
+        limit: limit.toString()
       });
 
       // Date range takes priority over year filter (sent to API for server-side filtering)
@@ -114,9 +115,10 @@ export default function Home() {
 
   const loadMoreCargas = useCallback(() => {
     if (pagination && pagination.hasMore && !loadingMore) {
+      if (currentPath === '/global-planning' || currentPath === '/planeamento') return; // No custom infinite scroll for planning yet, as we load all
       fetchCargas(pagination.page + 1, true);
     }
-  }, [pagination, loadingMore, fetchCargas]);
+  }, [pagination, loadingMore, fetchCargas, currentPath]);
 
   const handleYearFilterChange = useCallback((year: number | null) => {
     setYearFilter(year);
@@ -125,8 +127,10 @@ export default function Home() {
       setDateRangeFilter({ start: '', end: '' });
     }
     setOrders([]);
-    fetchCargas(1, false, year, year !== null ? { start: '', end: '' } : dateRangeFilter);
-  }, [fetchCargas, dateRangeFilter]);
+    // Determine limit based on current path
+    const limit = (currentPath === '/planeamento') ? 1000 : 50;
+    fetchCargas(1, false, year, year !== null ? { start: '', end: '' } : dateRangeFilter, limit);
+  }, [fetchCargas, dateRangeFilter, currentPath]);
 
   const handleDateRangeFilterChange = useCallback((start: string, end: string) => {
     const newDateRange = { start, end };
@@ -136,8 +140,9 @@ export default function Home() {
       setYearFilter(null);
     }
     setOrders([]);
-    fetchCargas(1, false, (start || end) ? null : yearFilter, newDateRange);
-  }, [fetchCargas, yearFilter]);
+    const limit = (currentPath === '/planeamento') ? 1000 : 50;
+    fetchCargas(1, false, (start || end) ? null : yearFilter, newDateRange, limit);
+  }, [fetchCargas, yearFilter, currentPath]);
 
   const runPrimaveraSync = useCallback(async () => {
     try {
@@ -224,6 +229,24 @@ export default function Home() {
   const handleNavigate = (path: string) => {
     setCurrentPath(path);
     setOpenNewOrder(false);
+    
+    // Auto-reload data with appropriate limit when switching views
+    if (path === '/planeamento') {
+       // Load ALL (or effectively all) for Gantt
+       setOrders([]);
+       fetchCargas(1, false, yearFilter, dateRangeFilter, 1000);
+    } else if (path === '/encomendas') {
+       // Reset to paginated view
+       setOrders([]);
+       fetchCargas(1, false, yearFilter, dateRangeFilter, 50);
+    } else if (path === '/') {
+        // Dashboard needs stats, maybe recent orders
+        // Keep existing orders if they are there, or re-fetch default
+        if (orders.length === 0 || orders.length > 50) {
+            setOrders([]);
+            fetchCargas(1, false, yearFilter, dateRangeFilter, 50);
+        }
+    }
   };
 
   const handleNewOrderFromSidebar = () => {
@@ -259,6 +282,7 @@ export default function Home() {
             onUpdateOrders={handleUpdateOrders}
             yearFilter={yearFilter}
             onYearFilterChange={handleYearFilterChange}
+            totalCount={pagination?.total || 0}
           />
         );
       case '/encomendas':
